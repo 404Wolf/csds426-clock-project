@@ -25,7 +25,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        zmapPackage = pkgs.callPackage ./zmap/build.nix { inherit zmap; };
+        zmapPackage = pkgs.callPackage ./zmap-scanning/build.nix { inherit zmap; };
 
         treefmtconfig = inputs.treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";
@@ -41,6 +41,7 @@
         devShells = {
           default = pkgs.mkShell {
             packages = with pkgs; [
+              openssl.dev
               zmapPackage
               cargo
               rust-analyzer

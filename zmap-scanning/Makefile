@@ -1,10 +1,7 @@
 # Makefile for building ZMap ICMP Timestamp Module
 
 CC = gcc
-CFLAGS = -Wall -Wextra -O2 -fPIC -std=gnu11
-ifdef ZMAP_SRC
 CFLAGS += -I$(ZMAP_SRC) -I$(ZMAP_SRC)/probe_modules -I$(ZMAP_SRC)/../lib
-endif
 LDFLAGS = -shared
 
 # Directories

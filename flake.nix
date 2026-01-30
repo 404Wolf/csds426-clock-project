@@ -25,50 +25,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        zmapPackage = pkgs.stdenv.mkDerivation {
-          pname = "zmap";
-          version = "4.3.0";
-          src = zmap;
-
-          nativeBuildInputs = with pkgs; [
-            cmake
-            pkg-config
-            flex
-            byacc
-            gengetopt
-          ];
-
-          buildInputs = with pkgs; [
-            libpcap
-            gmp
-            json_c
-            libunistring
-            judy
-          ];
-
-          # Copy custom probe module into zmap source tree before building
-          preConfigure = ''
-            cp ${./zmap/module_icmp_timestamp.c} src/probe_modules/module_icmp_timestamp.c
-
-            # Add the module to CMakeLists.txt
-            sed -i '/probe_modules\/module_icmp_echo_time.c/a\    probe_modules/module_icmp_timestamp.c' src/CMakeLists.txt
-
-            # Register the module in probe_modules.c
-            sed -i '/extern probe_module_t module_icmp_echo_time;/a\extern probe_module_t module_icmp_timestamp;' src/probe_modules/probe_modules.c
-            sed -i '/\&module_icmp_echo_time,/a\    \&module_icmp_timestamp,' src/probe_modules/probe_modules.c
-          '';
-
-          cmakeFlags = [
-            "-DENABLE_DEVELOPMENT=OFF"
-            "-DRESPECT_INSTALL_PREFIX_CONFIG=ON"
-          ];
-
-          meta = {
-            description = "Fast Internet-wide scanner";
-            homepage = "https://zmap.io";
-            license = pkgs.lib.licenses.asl20;
-          };
-        };
+        zmapPackage = pkgs.callPackage ./zmap/build.nix { inherit zmap; };
 
         treefmtconfig = inputs.treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";

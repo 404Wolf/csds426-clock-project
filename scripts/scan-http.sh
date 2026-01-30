@@ -15,12 +15,9 @@ SCAN_SPEED="$1"
 DO_TEST="${2:-1}"
 
 if [ "$DO_TEST" -eq 1 ]; then
-  # Get test IPs from shared function
-  TEST_TARGET=$(get_test_ips)
-  echo "Testing mode enabled. Scanning the following IPs: $TEST_TARGET"
-
+  TEST_TARGET=$(get_test_ips_file)
   sudo zmap -p 80 -o "data/http.csv" "$TEST_TARGET" -r "$SCAN_SPEED" --output-module=csv
-  sudo zmap --probe-module=icmp_echoscan -o "data/icmp.csv" "$TEST_TARGET" -r "$SCAN_SPEED" --output-module=csv --output-fields="*"
+  sudo zmap --probe-module=icmp_echoscan -o "data/icmp.csv" -I "$TEST_TARGET" -r "$SCAN_SPEED" --output-module=csv --output-fields="*"
 else
   sudo zmap -p 80 -o "data/http.csv" 0.0.0.0/0 -r "$SCAN_SPEED" --output-module=csv
   sudo zmap --probe-module=icmp_echoscan -o "data/icmp.csv" 0.0.0.0/0 -r "$SCAN_SPEED" --output-module=csv --output-fields="*"

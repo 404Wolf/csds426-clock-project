@@ -13,23 +13,18 @@ BUILD_DIR = build
 
 # Source files
 SOURCES = $(ZMAP_DIR)/module_icmp_timestamp.c
-OBJECTS = $(BUILD_DIR)/module_icmp_timestamp.o
 TARGET = $(BUILD_DIR)/module_icmp_timestamp.so
 
 # Default target
-all: $(TARGET)
+all: $(BUILD_DIR) $(TARGET)
 
 # Create build directory
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-# Compile object file
-$(BUILD_DIR)/%.o: $(ZMAP_DIR)/%.c $(ZMAP_DIR)/%.h | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-# Link shared library
-$(TARGET): $(OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $^
+# Build shared library directly from source
+$(TARGET): $(SOURCES) $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
 
 # Clean build artifacts
 clean:

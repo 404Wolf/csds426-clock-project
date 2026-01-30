@@ -7,13 +7,10 @@
 #include <sys/types.h>
 #include <time.h>
 
-// Forward declarations
 struct state_conf;
 struct ip;
 struct port_conf;
 typedef struct fieldset fieldset_t;
-
-// Minimal passthrough module for testing
 
 int icmp_timestamp_global_initialize(struct state_conf *conf);
 int icmp_timestamp_init_perthread(void **arg_ptr);

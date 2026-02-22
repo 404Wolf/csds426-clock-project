@@ -60,12 +60,11 @@
               libunistring
               pkg-config
             ];
-
             shellHook = ''
               export CC=${pkgs.gcc}/bin/gcc
               export ZMAP_SRC="${zmap}/src"
               export C_INCLUDE_PATH="${zmap}/src:${pkgs.zlib.dev}/include:${pkgs.libpcap}/include:${pkgs.json_c}/include:${pkgs.gmp.dev}/include"
-              bear -- make clean && bear -- make
+              bear -- make -C ./zmap-scanning clean && bear -- make -C ./zmap-scanning
             '';
           };
         };

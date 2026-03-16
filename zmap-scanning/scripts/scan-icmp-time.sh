@@ -16,7 +16,11 @@ BANDWIDTH="$1"
 DO_TEST="${2:-1}"
 
 MODULE_NAME="icmp_timestamp"
-ZMAP="$(which zmap)"
+ZMAP="$(which zmap 2>/dev/null || true)"
+if [ -z "$ZMAP" ]; then
+  echo "Error: zmap not found in PATH. Run this from inside 'nix develop'."
+  exit 1
+fi
 
 if [ "$DO_TEST" -eq 1 ]; then
   TEST_TARGET=$(get_test_ips_file)

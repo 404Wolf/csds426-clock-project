@@ -16,12 +16,13 @@ BANDWIDTH="$1"
 DO_TEST="${2:-1}"
 
 MODULE_NAME="icmp_timestamp"
+ZMAP="$(which zmap)"
 
 if [ "$DO_TEST" -eq 1 ]; then
   TEST_TARGET=$(get_test_ips_file)
-  sudo zmap --probe-module="$MODULE_NAME" -o "data/icmp_timestamp.csv" -I "$TEST_TARGET" -B "$BANDWIDTH" --output-module=csv --output-fields="*"
+  sudo "$ZMAP" --probe-module="$MODULE_NAME" -o "data/icmp_timestamp.csv" -I "$TEST_TARGET" -B "$BANDWIDTH" --output-module=csv --output-fields="*"
 else
-  sudo zmap --probe-module="$MODULE_NAME" -o "data/icmp_timestamp.csv" 0.0.0.0/0 -B "$BANDWIDTH" --output-module=csv --output-fields="*"
+  sudo "$ZMAP" --probe-module="$MODULE_NAME" -o "data/icmp_timestamp.csv" 0.0.0.0/0 -B "$BANDWIDTH" --output-module=csv --output-fields="*"
 fi
 
 # zmap runs as root so the output files are owned by root

@@ -59,6 +59,7 @@
               json_c
               libunistring
               pkg-config
+              quarto
             ];
             shellHook = ''
               export CC=${pkgs.gcc}/bin/gcc

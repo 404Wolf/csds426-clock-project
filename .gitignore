@@ -75,3 +75,5 @@ Cargo.lock
 # MSVC Windows builds of rustc generate these, which store debugging information
 
 # End of https://www.toptal.com/developers/gitignore/api/c,rust
+/slides/mid-report_files/libs/quarto-html
+/slides/mid-report_files/libs/revealjs

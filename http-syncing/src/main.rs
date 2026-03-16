@@ -35,15 +35,20 @@ fn main() {
             .redirect_auth_headers(ureq::config::RedirectAuthHeaders::SameHost)
             .build(),
     );
-    let mut results: Vec<(i64, DateTime<chrono::Utc>, DateTime<chrono::Utc>)> =
-        Vec::with_capacity(50);
+    let mut results: Vec<(
+        i64,
+        DateTime<chrono::Utc>,
+        DateTime<chrono::Utc>,
+        DateTime<chrono::Utc>,
+    )> = Vec::with_capacity(50);
 
     let rtt_estimate = estimate_rtt(&agent, &url);
+    dbg!(rtt_estimate);
 
     std::thread::scope(|s| {
         let mut handles = Vec::with_capacity(50);
         for i in -(((rtt_estimate / 2) as i64) + 500)..=100 {
-            if i % 1000 != 0 {
+            if i % 2000 != 0 {
                 continue;
             }
 
@@ -53,8 +58,8 @@ fn main() {
             let url: &str = &url;
 
             handles.push(s.spawn(move || {
-                let (server, sent_at) = sleep_to_edge_and_get_date(agent, url, i);
-                (i, server, sent_at)
+                let (server, sent_at, receive_at) = sleep_to_edge_and_get_date(agent, url, i);
+                (i, server, sent_at, receive_at)
             }));
         }
 
@@ -63,21 +68,31 @@ fn main() {
         }
     });
 
-    results.sort_by_key(|(_, server, sent_at)| (*server, *sent_at));
+    results.sort_by_key(|(_, server, sent_at, receive_at)| (*server, *sent_at, *receive_at));
 
-    println!("offset_micros,server,sent_at");
-    for (i, server, sent_at) in &results {
-        println!("{},{},{}", i, server.to_rfc3339(), sent_at.to_rfc3339());
+    println!("offset_micros,server,send_at,receive_at");
+    for (i, server, sent_at, receive_at) in &results {
+        println!(
+            "{},{},{},{}",
+            i,
+            server.to_rfc3339(),
+            sent_at.to_rfc3339(),
+            receive_at.to_rfc3339()
+        );
     }
 }
 
 /// Sleeps until the end of the current second plus some offset, and then
-/// requests the server's date. Returns the server's date, and the sent at date.
+/// requests the server's date. Returns the server's date, send_at, and receive_at.
 fn sleep_to_edge_and_get_date(
     agent: &Agent,
     url: &str,
     offset_micros: i64,
-) -> (DateTime<chrono::Utc>, DateTime<chrono::Utc>) {
+) -> (
+    DateTime<chrono::Utc>,
+    DateTime<chrono::Utc>,
+    DateTime<chrono::Utc>,
+) {
     let time_now = chrono::Utc::now();
 
     // Sleep until the next second boundary (+ offset)
@@ -89,6 +104,7 @@ fn sleep_to_edge_and_get_date(
     let sent_at = chrono::Utc::now();
 
     let resp = agent.head(url).call().expect("failed to make request");
+    let receive_at = chrono::Utc::now();
 
     let date_header = resp
         .headers()
@@ -101,7 +117,7 @@ fn sleep_to_edge_and_get_date(
         httpdate::parse_http_date(date_header).expect("failed to parse date header");
     let reported_date: DateTime<chrono::Utc> = DateTime::<chrono::Utc>::from(reported_date);
 
-    (reported_date, sent_at)
+    (reported_date, sent_at, receive_at)
 }
 
 /// Estimate the RTT to the host by making 5 requests and taking the average.

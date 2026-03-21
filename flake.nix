@@ -27,6 +27,18 @@
 
         zmapPackage = pkgs.callPackage ./zmap-scanning/build.nix { inherit zmap; };
 
+        scan-icmp-time = pkgs.writeShellApplication {
+          name = "scan-icmp-time";
+          runtimeInputs = [ zmapPackage pkgs.dig ];
+          text = builtins.readFile ./zmap-scanning/scripts/scan-icmp-time.sh;
+        };
+
+        scan-http = pkgs.writeShellApplication {
+          name = "scan-http";
+          runtimeInputs = [ zmapPackage pkgs.dig pkgs.gnused ];
+          text = builtins.readFile ./zmap-scanning/scripts/scan-http.sh;
+        };
+
         treefmtconfig = inputs.treefmt-nix.lib.evalModule pkgs {
           projectRootFile = "flake.nix";
           programs = {
@@ -68,6 +80,19 @@
               bear -- make -C ./zmap-scanning clean && bear -- make -C ./zmap-scanning
             '';
           };
+        };
+        apps = {
+          scan-icmp-time = {
+            type = "app";
+            program = "${scan-icmp-time}/bin/scan-icmp-time";
+          };
+          scan-http = {
+            type = "app";
+            program = "${scan-http}/bin/scan-http";
+          };
+        };
+        packages = {
+          inherit scan-icmp-time scan-http;
         };
         formatter = treefmtconfig.config.build.wrapper;
         checks = {

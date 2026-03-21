@@ -77,3 +77,4 @@ Cargo.lock
 # End of https://www.toptal.com/developers/gitignore/api/c,rust
 /slides/mid-report_files/libs/quarto-html
 /slides/mid-report_files/libs/revealjs
+/http-syncing/.claude

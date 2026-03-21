@@ -1,5 +1,6 @@
 use chrono::DateTime;
 use clap::Parser;
+use rayon::prelude::*;
 use ureq::Agent;
 use ureq::tls::{TlsConfig, TlsProvider};
 
@@ -7,23 +8,13 @@ use ureq::tls::{TlsConfig, TlsProvider};
 #[command(name = "http-syncing")]
 #[command(about = "Estimate local clock desync using HTTP Date header", long_about = None)]
 struct Args {
-    /// URL to request (e.g. https://example.com or example.com)
+    /// Path to CSV file with one IPv4/domain per row
     #[arg(required = true)]
-    url: String,
+    input: std::path::PathBuf,
 }
 
-fn main() {
-    let args = Args::parse();
-
-    let url = if args.url.starts_with("http://") || args.url.starts_with("https://") {
-        args.url
-    } else {
-        format!("https://{}", args.url)
-    };
-
-    // Keep behavior similar to prior code that allowed invalid certs.
-    // Consider removing this for production use.
-    let agent = Agent::new_with_config(
+fn make_agent() -> Agent {
+    Agent::new_with_config(
         ureq::config::Config::builder()
             .tls_config(
                 TlsConfig::builder()
@@ -34,52 +25,81 @@ fn main() {
             .http_status_as_error(false)
             .redirect_auth_headers(ureq::config::RedirectAuthHeaders::SameHost)
             .build(),
-    );
+    )
+}
+
+fn main() {
+    let args = Args::parse();
+
+    let mut rdr = csv::ReaderBuilder::new()
+        .flexible(true)
+        .has_headers(false)
+        .from_path(&args.input)
+        .expect("failed to open input file");
+
+    let hosts: Vec<String> = rdr
+        .records()
+        .filter_map(|r| r.ok())
+        .filter_map(|r| r.get(0).map(|s| s.trim().to_string()))
+        .filter(|s| !s.is_empty() && s != "host" && s != "url" && s != "ip")
+        .map(|s| {
+            if s.starts_with("http://") || s.starts_with("https://") {
+                s
+            } else {
+                format!("https://{}", s)
+            }
+        })
+        .collect();
+
     let mut results: Vec<(
+        String,
         i64,
         DateTime<chrono::Utc>,
         DateTime<chrono::Utc>,
         DateTime<chrono::Utc>,
-    )> = Vec::with_capacity(50);
+    )> = hosts
+        .par_iter()
+        .flat_map(|url| {
+            let agent = make_agent();
+            let rtt_estimate = estimate_rtt(&agent, url);
 
-    let rtt_estimate = estimate_rtt(&agent, &url);
-    dbg!(rtt_estimate);
+            let rows: Vec<(
+                String,
+                i64,
+                DateTime<chrono::Utc>,
+                DateTime<chrono::Utc>,
+                DateTime<chrono::Utc>,
+            )> = (-(rtt_estimate as i64 / 3)..=(rtt_estimate as i64 / 3))
+                .step_by(1000)
+                .collect::<Vec<_>>()
+                .into_par_iter()
+                .map(|i| {
+                    let req_url = format!("{}?q={}", url, rand::random::<u64>());
+                    let (server, sent_at, receive_at) =
+                        sleep_to_edge_and_get_date(&agent, req_url.as_str(), i);
+                    (url.clone(), i, server, sent_at, receive_at)
+                })
+                .collect();
+            rows
+        })
+        .collect();
 
-    std::thread::scope(|s| {
-        let mut handles = Vec::with_capacity(50);
-        for i in -(((rtt_estimate / 2) as i64) + 500)..=100 {
-            if i % 2000 != 0 {
-                continue;
-            }
-
-            let i = i * 10;
-
-            let agent = &agent;
-            let url: &str = &url;
-
-            handles.push(s.spawn(move || {
-                let (server, sent_at, receive_at) = sleep_to_edge_and_get_date(agent, url, i);
-                (i, server, sent_at, receive_at)
-            }));
-        }
-
-        for h in handles {
-            results.push(h.join().expect("scoped thread panicked"));
-        }
+    results.sort_by_key(|(host, _, server, sent_at, receive_at)| {
+        (host.clone(), *server, *sent_at, *receive_at)
     });
 
-    results.sort_by_key(|(_, server, sent_at, receive_at)| (*server, *sent_at, *receive_at));
-
-    println!("offset_micros,server,send_at,receive_at");
-    for (i, server, sent_at, receive_at) in &results {
-        println!(
-            "{},{},{},{}",
-            i,
-            server.to_rfc3339(),
-            sent_at.to_rfc3339(),
-            receive_at.to_rfc3339()
-        );
+    let mut wtr = csv::Writer::from_writer(std::io::stdout());
+    for (host, i, server, sent_at, receive_at) in &results {
+        wtr.serialize(csds426_clock_project::Record {
+            host: host.clone(),
+            offset_micros: *i,
+            server: *server,
+            send_at: *sent_at,
+            receive_at: *receive_at,
+        })
+        .expect("failed to write record");
     }
+    wtr.flush().expect("failed to flush");
 }
 
 /// Sleeps until the end of the current second plus some offset, and then

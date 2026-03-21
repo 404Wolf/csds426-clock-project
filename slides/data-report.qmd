@@ -1,0 +1,23 @@
+---
+title: "Clocks on the Web"
+subtitle: "Preliminary Data Results"
+date: "2026-03-26"
+format:
+  revealjs:
+    theme: simple
+    slide-number: true
+    transition: fade
+    scrollable: true
+    smaller: true
+---
+
+## Approach
+
+- Probe HTTP servers by sending HEAD requests timed to land near second boundaries
+- Vary the send offset across the RTT window to sample different clock readings
+- Compare local clock (send/receive timestamps) against server `Date:` header
+
+## Results
+
+## Next Steps
+

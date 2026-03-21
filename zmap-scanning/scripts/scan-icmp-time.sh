@@ -9,7 +9,7 @@ source "$SCRIPT_DIR/shared.sh"
 DO_TEST="${1:-1}"
 
 if [ "$DO_TEST" -eq 1 ]; then
-  TARGET=(-I "$(get_test_ips_file)")
+  TARGET=(-w "$(get_test_ips_file)")
 else
   TARGET=(0.0.0.0/0)
 fi

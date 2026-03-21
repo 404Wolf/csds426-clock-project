@@ -14,10 +14,10 @@ else
   TARGET=(0.0.0.0/0)
 fi
 
-zmap --probe-module=icmp_timestamp -o "data/icmp_timestamp.csv" "${TARGET[@]}" --output-module=csv --output-fields="*"
+zmap --probe-module=icmp_timestamp -o "data/icmp_timestamp.csv" "${TARGET[@]}" --output-module=csv --output-fields="*" -r 0
 chown "$USER" "data/icmp_timestamp.csv"
 echo "ICMP timestamp scan complete. Results saved to data/icmp_timestamp.csv"
 
-zmap --probe-module=icmp_echoscan -o "data/icmp_echo.csv" "${TARGET[@]}" --output-module=csv --output-fields="*"
+zmap --probe-module=icmp_echoscan -o "data/icmp_echo.csv" "${TARGET[@]}" --output-module=csv --output-fields="*" -r 0
 chown "$USER" "data/icmp_echo.csv"
 echo "ICMP echo scan complete. Results saved to data/icmp_echo.csv"

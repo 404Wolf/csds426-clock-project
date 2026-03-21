@@ -1,4 +1,4 @@
-use csds426_clock_project::Record;
+use clocks::Record;
 use itertools::Itertools;
 
 fn analyze_host(host: &str, rows: &[&Record]) {

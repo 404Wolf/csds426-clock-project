@@ -90,7 +90,7 @@ fn main() {
 
     let mut wtr = csv::Writer::from_writer(std::io::stdout());
     for (host, i, server, sent_at, receive_at) in &results {
-        wtr.serialize(csds426_clock_project::Record {
+        wtr.serialize(clocks::Record {
             host: host.clone(),
             offset_micros: *i,
             server: *server,

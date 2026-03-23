@@ -25,18 +25,18 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        zmapPackage = pkgs.callPackage ./zmap-scanning/build.nix { inherit zmap; };
+        zmapPackage = pkgs.callPackage ./icmp_clocksync/build.nix { inherit zmap; };
 
         scan-icmp-time = pkgs.writeShellApplication {
           name = "scan-icmp-time";
           runtimeInputs = [ zmapPackage pkgs.dig ];
-          text = builtins.readFile ./zmap-scanning/scripts/scan-icmp-time.sh;
+          text = builtins.readFile ./icmp_clocksync/scripts/scan-icmp-time.sh;
         };
 
         scan-http = pkgs.writeShellApplication {
           name = "scan-http";
           runtimeInputs = [ zmapPackage pkgs.dig pkgs.gnused ];
-          text = builtins.readFile ./zmap-scanning/scripts/scan-http.sh;
+          text = builtins.readFile ./icmp_clocksync/scripts/scan-http.sh;
         };
 
         treefmtconfig = inputs.treefmt-nix.lib.evalModule pkgs {
@@ -53,6 +53,7 @@
         devShells = {
           default = pkgs.mkShell {
             packages = with pkgs; [
+              just
               openssl.dev
               zmapPackage
               cargo
@@ -77,7 +78,7 @@
               export CC=${pkgs.gcc}/bin/gcc
               export ZMAP_SRC="${zmap}/src"
               export C_INCLUDE_PATH="${zmap}/src:${pkgs.zlib.dev}/include:${pkgs.libpcap}/include:${pkgs.json_c}/include:${pkgs.gmp.dev}/include"
-              bear -- make -C ./zmap-scanning clean && bear -- make -C ./zmap-scanning
+              bear -- make -C ./icmp_clocksync clean && bear -- make -C ./icmp_clocksync
             '';
           };
         };

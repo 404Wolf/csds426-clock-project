@@ -73,6 +73,8 @@
               libunistring
               pkg-config
               quarto
+              dig
+              inetutils
             ];
             shellHook = ''
               export CC=${pkgs.gcc}/bin/gcc

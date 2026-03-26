@@ -30,3 +30,9 @@ geo-plot INPUT="data/icmp_clockdiff_analysis.csv" OUTPUT="data/clock_sync_map.ht
 
 icmp-vs-http INPUT="output.csv" OUTPUT="data/icmp_vs_http.html" *ARGS:
     cd analysis && uv run python icmp_vs_http.py ../{{INPUT}} -o ../{{OUTPUT}} {{ARGS}}
+
+data-slides-preview:
+    cd slides && quarto preview data-report.qmd
+
+intro-slides-preview:
+    cd slides && quarto preview intro-report.qmd

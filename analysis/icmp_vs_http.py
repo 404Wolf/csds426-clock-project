@@ -1,5 +1,3 @@
-"""Scatter plot comparing ICMP vs HTTP clock offset measurements."""
-
 import argparse
 from pathlib import Path
 

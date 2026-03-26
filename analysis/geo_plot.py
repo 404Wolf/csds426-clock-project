@@ -1,5 +1,3 @@
-"""Plot ICMP clock sync data on a world map, colored by sync quality."""
-
 import argparse
 import math
 from pathlib import Path
@@ -41,7 +39,8 @@ def _td_ms(td: pd.Timedelta) -> float:
     return td.total_seconds() * 1000
 
 
-# Human-readable colorbar ticks: pick round times that spread across the scale
+# Human-readable colorbar ticks. This is what shows up in the key, so we want to
+# state it in useful units (not giant ms)
 _TICK_MS = {
     "0ms":  0,
     "10ms": _td_ms(pd.Timedelta("10ms")),
@@ -60,7 +59,7 @@ def build_figure(df: pd.DataFrame) -> go.Figure:
         lat="latitude",
         lon="longitude",
         color="log_offset",
-        color_continuous_scale="RdYlGn_r",
+        color_continuous_scale="RdYlGn_r", # magic that handles colors idk
         range_color=[0, df["log_offset"].quantile(0.95)],
         projection="natural earth",
         hover_data={

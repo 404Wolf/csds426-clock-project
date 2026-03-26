@@ -4,6 +4,10 @@
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     zmap.url = "github:zmap/zmap";
     zmap.flake = false;
     treefmt-nix = {
@@ -24,6 +28,14 @@
       system:
       let
         pkgs = import nixpkgs { inherit system; };
+        rustToolchain = inputs.fenix.packages.${system}.stable.withComponents [
+          "cargo"
+          "clippy"
+          "rustc"
+          "rustfmt"
+          "rust-src"
+          "rust-analyzer"
+        ];
 
         zmapPackage = pkgs.callPackage ./icmp_clocksync/build.nix { inherit zmap; };
 
@@ -52,14 +64,12 @@
       {
         devShells = {
           default = pkgs.mkShell {
-            packages = with pkgs; [
+            packages = [
+              rustToolchain
+            ] ++ (with pkgs; [
               just
               openssl.dev
               zmapPackage
-              cargo
-              rust-analyzer
-              rustc
-              rustfmt
               gcc
               clang-tools
               bear
@@ -75,7 +85,7 @@
               quarto
               dig
               inetutils
-            ];
+            ]);
             shellHook = ''
               export CC=${pkgs.gcc}/bin/gcc
               export ZMAP_SRC="${zmap}/src"

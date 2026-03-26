@@ -2,6 +2,8 @@ use std::io::BufReader;
 
 use serde::{Deserialize, Serialize};
 
+pub mod shared;
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct IcmpTimestampRecord {
     pub saddr: String,
@@ -29,36 +31,48 @@ pub struct IcmpTimestampRecord {
     pub timestamp_us: u64,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ResolvedRecord {
+#[derive(Debug, Serialize)]
+pub struct EnrichedRecord {
     pub batch_num: u64,
-    pub saddr: String,
+    pub ip: String,
     pub hostname: String,
-    pub daddr: String,
-    pub otime: u64,
-    pub rtime: u64,
-    pub ttime: u64,
-    pub rtt_ms: u64,
-    /// Signed clock offset in ms: positive = remote ahead, negative = remote behind.
-    /// Computed as ((rtime - otime) + (ttime - (otime + rtt_ms))) / 2
-    pub clock_offset_ms: i64,
-    /// Whether port 80 (HTTP) was open at time of scan
+    pub rtt_ms: f64,
     pub is_http: bool,
-    /// Whether the HTTP response included a Date header
     pub had_date: bool,
+    pub country: String,
+    pub city: String,
+    pub latitude: f64,
+    pub longitude: f64,
+    #[serde(flatten)]
+    pub source: SourceData,
 }
 
-/// Read the output CSV and return the highest batch_num, or None if empty/missing.
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum SourceData {
+    IcmpTimestamp {
+        daddr: String,
+        otime: u64,
+        rtime: u64,
+        ttime: u64,
+        clock_offset_ms: i64,
+    },
+    PlainIp {},
+}
+
+#[derive(Debug, Deserialize)]
+struct BatchOnly {
+    batch_num: u64,
+}
+
 pub fn get_latest_batch(path: &std::path::Path) -> Option<u64> {
     let file = std::fs::File::open(path).ok()?;
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
         .from_reader(std::io::BufReader::new(file));
     let mut max_batch = None;
-    for result in rdr.deserialize::<ResolvedRecord>() {
-        if let Ok(rec) = result {
-            max_batch = Some(max_batch.map_or(rec.batch_num, |m: u64| m.max(rec.batch_num)));
-        }
+    for rec in rdr.deserialize::<BatchOnly>().flatten() {
+        max_batch = Some(max_batch.map_or(rec.batch_num, |m: u64| m.max(rec.batch_num)));
     }
     max_batch
 }

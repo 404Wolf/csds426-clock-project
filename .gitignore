@@ -78,3 +78,5 @@ Cargo.lock
 /slides/mid-report_files/libs/quarto-html
 /slides/mid-report_files/libs/revealjs
 /http-syncing/.claude
+/GeoLite2-City.mmdb
+/server

@@ -6,7 +6,10 @@ edition = "2024"
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 csv = "1.4.0"
+itertools = "0.14"
 dns-lookup = "2"
+maxminddb = "0.24"
+ping-rs = "0.1"
 ureq = "3.1.4"
 rayon = "1.11.0"
 serde = { version = "1", features = ["derive"] }

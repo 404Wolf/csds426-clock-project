@@ -11,13 +11,24 @@ format:
     smaller: true
 ---
 
-## Approach
+## I did a zmap!
 
-- Probe HTTP servers by sending HEAD requests timed to land near second boundaries
-- Vary the send offset across the RTT window to sample different clock readings
-- Compare local clock (send/receive timestamps) against server `Date:` header
+- Ran a `zmap` ICMP Timestamp scan from an allowed VPS
+- Scanned for hosts that respond to ICMP Timestamp requests
+
+## Results
+
+## ICMP Clocksync + HTTP Scanner
+
+- Ran the ICMP clocksync analysis on responding hosts
+  - Computed clock offsets using ICMP Timestamp fields
+- Then ran the HTTP scanner on each host
+  - Checked for open port 80 and `Date:` header presence
 
 ## Results
 
 ## Next Steps
+
+- Full internet zmap scan
+<!-- TODO: add more here -->
 

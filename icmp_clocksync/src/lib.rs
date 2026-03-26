@@ -75,21 +75,11 @@ pub struct EnrichedRecord {
     pub city: String,
     pub latitude: f64,
     pub longitude: f64,
-    #[serde(flatten)]
-    pub source: SourceData,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(untagged)]
-pub enum SourceData {
-    IcmpTimestamp {
-        daddr: String,
-        otime: u64,
-        rtime: u64,
-        ttime: u64,
-        clock_offset_ms: i64,
-    },
-    PlainIp {},
+    pub daddr: Option<String>,
+    pub otime: Option<u64>,
+    pub rtime: Option<u64>,
+    pub ttime: Option<u64>,
+    pub clock_offset_ms: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]

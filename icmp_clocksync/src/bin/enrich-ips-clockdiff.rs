@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use icmp_clocksync::shared;
-use icmp_clocksync::{get_latest_batch, iter_icmp_csv, EnrichedRecord, IcmpTimestampRecord, SourceData};
+use icmp_clocksync::{get_latest_batch, iter_icmp_csv, EnrichedRecord, IcmpTimestampRecord};
 use itertools::Itertools;
 use rayon::prelude::*;
 
@@ -116,13 +116,11 @@ fn flush_batch(
                 city: geo.city,
                 latitude: geo.latitude,
                 longitude: geo.longitude,
-                source: SourceData::IcmpTimestamp {
-                    daddr: record.daddr.clone(),
-                    otime: record.otime,
-                    rtime: record.rtime,
-                    ttime: record.ttime,
-                    clock_offset_ms,
-                },
+                daddr: Some(record.daddr.clone()),
+                otime: Some(record.otime),
+                rtime: Some(record.rtime),
+                ttime: Some(record.ttime),
+                clock_offset_ms: Some(clock_offset_ms),
             }
         })
         .collect();

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use icmp_clocksync::shared;
-use icmp_clocksync::{get_latest_batch, iter_echo_csv, EnrichedRecord, IcmpEchoRecord, SourceData};
+use icmp_clocksync::{get_latest_batch, iter_echo_csv, EnrichedRecord, IcmpEchoRecord};
 use itertools::Itertools;
 use rayon::prelude::*;
 
@@ -96,7 +96,11 @@ fn main() {
                     city: geo.city,
                     latitude: geo.latitude,
                     longitude: geo.longitude,
-                    source: SourceData::PlainIp {},
+                    daddr: None,
+                    otime: None,
+                    rtime: None,
+                    ttime: None,
+                    clock_offset_ms: None,
                 })
             })
             .collect();

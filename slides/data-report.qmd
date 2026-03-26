@@ -23,11 +23,11 @@ format:
 
 ## Enrichment Pipeline
 
-For each responding host, we enrich with:
+For each responding host, I'm enriching with:
 
 - **Reverse DNS** hostname
 - **ICMP ping** RTT (ms)
-- **GeoIP** (MaxMind): country, city, lat/lon
+- **GeoIP** (MaxMind): geo data like city, lat long
 - **HTTP probe**: port 80 open? `Date:` header present?
 - **Clock offset** (ICMP Timestamp hosts only): computed from timestamp fields
 

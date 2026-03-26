@@ -58,6 +58,8 @@
             nixfmt.enable = true;
             clang-format.enable = true;
             shfmt.enable = true;
+            ruff-format.enable = true;
+            ruff-check.enable = true;
           };
         };
       in
@@ -85,6 +87,8 @@
               quarto
               dig
               inetutils
+              uv
+              ruff
             ]);
             shellHook = ''
               export CC=${pkgs.gcc}/bin/gcc

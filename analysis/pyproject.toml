@@ -1,0 +1,15 @@
+[project]
+name = "clock-analysis"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.2",
+    "plotly>=6.0",
+    "kaleido>=0.2",
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]

@@ -1,8 +1,6 @@
 use chrono::DateTime;
 use clap::Parser;
 use rayon::prelude::*;
-use ureq::Agent;
-use ureq::tls::{TlsConfig, TlsProvider};
 
 #[derive(Parser, Debug)]
 #[command(name = "http-syncing")]
@@ -19,21 +17,6 @@ struct Args {
     /// Number of times to scan each host
     #[arg(short, long, default_value_t = 1)]
     runs: u32,
-}
-
-fn make_agent() -> Agent {
-    Agent::new_with_config(
-        ureq::config::Config::builder()
-            .tls_config(
-                TlsConfig::builder()
-                    .provider(TlsProvider::Rustls)
-                    .disable_verification(true)
-                    .build(),
-            )
-            .http_status_as_error(false)
-            .redirect_auth_headers(ureq::config::RedirectAuthHeaders::SameHost)
-            .build(),
-    )
 }
 
 fn main() {
@@ -74,8 +57,9 @@ fn main() {
     )> = work
         .par_iter()
         .flat_map(|(url, run_num)| {
-            let agent = make_agent();
-            let rtt_estimate = estimate_rtt(&agent, url);
+            let agent = clocks::make_agent();
+            let rtt_estimate =
+                clocks::estimate_rtt(&agent, url).expect("failed to estimate RTT");
 
             let step_micros: i64 = 300; // ~0.3ms
             let entries: i64 = 100;
@@ -103,7 +87,8 @@ fn main() {
                 .map(|i| {
                     let req_url = format!("{}?q={}", url, rand::random::<u64>());
                     let (server, sent_at, receive_at) =
-                        sleep_to_edge_and_get_date(&agent, req_url.as_str(), i);
+                        clocks::sleep_to_edge_and_get_date(&agent, req_url.as_str(), i)
+                            .expect("failed to get date");
                     (url.clone(), *run_num, i, server, sent_at, receive_at)
                 })
                 .collect();
@@ -128,56 +113,4 @@ fn main() {
         .expect("failed to write record");
     }
     wtr.flush().expect("failed to flush");
-}
-
-/// Sleeps until the end of the current second plus some offset, and then
-/// requests the server's date. Returns the server's date, send_at, and receive_at.
-fn sleep_to_edge_and_get_date(
-    agent: &Agent,
-    url: &str,
-    offset_micros: i64,
-) -> (
-    DateTime<chrono::Utc>,
-    DateTime<chrono::Utc>,
-    DateTime<chrono::Utc>,
-) {
-    let time_now = chrono::Utc::now();
-
-    // Sleep until the next second boundary (+ offset)
-    let micros_until_next_second =
-        1_000_000i64 - (time_now.timestamp_subsec_micros() as i64 % 1_000_000i64);
-    let total_micros = (micros_until_next_second + offset_micros).max(0);
-
-    spin_sleep::sleep(std::time::Duration::from_micros(total_micros as u64));
-    let sent_at = chrono::Utc::now();
-
-    let resp = agent.head(url).call().expect("failed to make request");
-    let receive_at = chrono::Utc::now();
-
-    let date_header = resp
-        .headers()
-        .get("date")
-        .expect("didn't have date header")
-        .to_str()
-        .expect("failed to convert date header to string");
-
-    let reported_date =
-        httpdate::parse_http_date(date_header).expect("failed to parse date header");
-    let reported_date: DateTime<chrono::Utc> = DateTime::<chrono::Utc>::from(reported_date);
-
-    (reported_date, sent_at, receive_at)
-}
-
-/// Estimate the RTT to the host by making 5 requests and taking the average.
-/// Returns the average RTT in microseconds.
-fn estimate_rtt(agent: &Agent, url: &str) -> u128 {
-    let mut rtt_sum_micros: u128 = 0;
-
-    for _ in 0..5 {
-        let start = std::time::Instant::now();
-        agent.head(url).call().expect("failed to make request");
-        rtt_sum_micros += start.elapsed().as_micros();
-    }
-
-    rtt_sum_micros / 5
 }

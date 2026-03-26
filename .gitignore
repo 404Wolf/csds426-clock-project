@@ -80,3 +80,4 @@ Cargo.lock
 /http-syncing/.claude
 /GeoLite2-City.mmdb
 /server
+/analysis/.venv

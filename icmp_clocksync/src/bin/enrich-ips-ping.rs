@@ -1,10 +1,10 @@
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader};
+use std::net::IpAddr;
 use std::path::PathBuf;
 
 use clap::Parser;
 use icmp_clocksync::shared;
-use icmp_clocksync::{get_latest_batch, EnrichedRecord, SourceData};
+use icmp_clocksync::{get_latest_batch, iter_echo_csv, EnrichedRecord, IcmpEchoRecord, SourceData};
 use itertools::Itertools;
 use rayon::prelude::*;
 
@@ -12,14 +12,14 @@ const BATCH_SIZE: usize = 100;
 
 #[derive(Parser)]
 struct Args {
-    /// Input file: one IP address per line
+    /// Input CSV file (zmap icmp_echoscan output)
     input: PathBuf,
     /// Output CSV file
     output: PathBuf,
     /// Path to GeoLite2-City.mmdb file
     #[arg(long, default_value = "GeoLite2-City.mmdb")]
     mmdb: PathBuf,
-    /// Only process the first N IPs
+    /// Only process the first N rows
     #[arg(short = 'n', long)]
     limit: Option<usize>,
 }
@@ -37,23 +37,30 @@ fn main() {
         eprintln!("resuming after batch {b}, skipping {skip_rows} rows");
     }
 
-    let file = File::open(&args.input).expect("failed to open input file");
-    let lines = BufReader::new(file)
-        .lines()
-        .filter_map(|l| {
-            let line = l.ok()?.trim().to_string();
-            if line.is_empty() { None } else { Some(line) }
-        });
+    let file = File::open(&args.input).expect("failed to open input csv");
+    let iter = iter_echo_csv(file);
 
-    let lines: Box<dyn Iterator<Item = String>> = if let Some(n) = args.limit {
-        Box::new(lines.skip(skip_rows).take(n))
+    let valid_rows = iter.filter_map(|r| match r {
+        Ok(rec) if rec.success == 1 => Some(rec),
+        Ok(_) => None,
+        Err(e) => {
+            eprintln!("skipping bad row: {e}");
+            None
+        }
+    });
+
+    let valid_rows: Box<dyn Iterator<Item = IcmpEchoRecord>> = if let Some(n) = args.limit {
+        Box::new(valid_rows.skip(skip_rows).take(n))
     } else {
-        Box::new(lines.skip(skip_rows))
+        Box::new(valid_rows.skip(skip_rows))
     };
 
     let append = resume_after.is_some();
     let out_file = if append {
-        OpenOptions::new().append(true).open(&args.output).expect("failed to open output csv for append")
+        OpenOptions::new()
+            .append(true)
+            .open(&args.output)
+            .expect("failed to open output csv for append")
     } else {
         File::create(&args.output).expect("failed to create output csv")
     };
@@ -64,14 +71,14 @@ fn main() {
     let start_batch = resume_after.map_or(0, |b| b + 1);
     let mut last_batch = start_batch;
 
-    for (i, chunk) in lines.chunks(BATCH_SIZE).into_iter().enumerate() {
+    for (i, chunk) in valid_rows.chunks(BATCH_SIZE).into_iter().enumerate() {
         let batch_num = start_batch + i as u64;
         let batch: Vec<_> = chunk.collect();
 
         let enriched: Vec<EnrichedRecord> = batch
             .par_iter()
-            .filter_map(|ip_str| {
-                let ip = ip_str.parse().ok()?;
+            .filter_map(|record| {
+                let ip: IpAddr = record.saddr.parse().ok()?;
                 let rtt_ms = shared::ping_rtt(ip)?;
 
                 let hostname = shared::resolve_hostname(ip);
@@ -80,7 +87,7 @@ fn main() {
 
                 Some(EnrichedRecord {
                     batch_num,
-                    ip: ip_str.clone(),
+                    ip: record.saddr.clone(),
                     hostname,
                     rtt_ms,
                     is_http,

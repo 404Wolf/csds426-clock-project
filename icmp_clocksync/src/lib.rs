@@ -31,6 +31,38 @@ pub struct IcmpTimestampRecord {
     pub timestamp_us: u64,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct IcmpEchoRecord {
+    pub saddr: String,
+    pub saddr_raw: u32,
+    pub daddr: String,
+    pub daddr_raw: u32,
+    pub ipid: u16,
+    pub ttl: u8,
+    #[serde(rename = "type")]
+    pub icmp_type: u8,
+    pub code: u8,
+    pub icmp_id: u16,
+    pub seq: u16,
+    pub classification: String,
+    pub success: u8,
+    pub data: String,
+    pub repeat: u8,
+    pub cooldown: u8,
+    pub timestamp_str: String,
+    pub timestamp_ts: u64,
+    pub timestamp_us: u64,
+}
+
+pub fn iter_echo_csv<R: std::io::Read>(
+    reader: R,
+) -> csv::DeserializeRecordsIntoIter<BufReader<R>, IcmpEchoRecord> {
+    csv::ReaderBuilder::new()
+        .flexible(true)
+        .from_reader(BufReader::new(reader))
+        .into_deserialize()
+}
+
 #[derive(Debug, Serialize)]
 pub struct EnrichedRecord {
     pub batch_num: u64,

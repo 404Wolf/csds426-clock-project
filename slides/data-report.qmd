@@ -13,17 +13,23 @@ format:
 
 ## I did a zmap!
 
-- Ran a `zmap` ICMP Timestamp scan from an allowed VPS
+- Ran a `zmap` ICMP Timestamp scan from an allowed VPS*
 - Scanned for hosts that respond to ICMP Timestamp requests
+- And 3% of hosts do! (10% support regular ICMP echo)
+
+* My scan only includes 30% of the internet. The server got disconnected part way through :(
 
 ## Results
 
-## ICMP Clocksync + HTTP Scanner
+## Enrichment Pipeline
 
-- Ran the ICMP clocksync analysis on responding hosts
-  - Computed clock offsets using ICMP Timestamp fields
-- Then ran the HTTP scanner on each host
-  - Checked for open port 80 and `Date:` header presence
+For each responding host, we enrich with:
+
+- **Reverse DNS** hostname
+- **ICMP ping** RTT (ms)
+- **GeoIP** (MaxMind): country, city, lat/lon
+- **HTTP probe**: port 80 open? `Date:` header present?
+- **Clock offset** (ICMP Timestamp hosts only): computed from timestamp fields
 
 ## Results
 
@@ -31,4 +37,3 @@ format:
 
 - Full internet zmap scan
 <!-- TODO: add more here -->
-

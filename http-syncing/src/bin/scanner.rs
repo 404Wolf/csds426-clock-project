@@ -12,6 +12,10 @@ struct Args {
     #[arg(required = true)]
     input: std::path::PathBuf,
 
+    /// Path to write CSV output to
+    #[arg(required = true)]
+    output: std::path::PathBuf,
+
     /// Number of times to scan each host
     #[arg(short, long, default_value_t = 1)]
     runs: u32,
@@ -111,7 +115,7 @@ fn main() {
         (host.clone(), *run_num, *server, *sent_at, *receive_at)
     });
 
-    let mut wtr = csv::Writer::from_writer(std::io::stdout());
+    let mut wtr = csv::Writer::from_path(&args.output).expect("failed to open output file");
     for (host, run_num, i, server, sent_at, receive_at) in &results {
         wtr.serialize(clocks::Record {
             host: host.clone(),

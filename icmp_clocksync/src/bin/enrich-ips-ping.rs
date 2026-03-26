@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use icmp_clocksync::shared;
-use icmp_clocksync::{get_latest_batch, iter_echo_csv, EnrichedRecord, IcmpEchoRecord};
+use icmp_clocksync::{EnrichedRecord, IcmpEchoRecord, get_latest_batch, iter_echo_csv};
 use itertools::Itertools;
 use rayon::prelude::*;
 

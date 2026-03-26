@@ -81,3 +81,4 @@ Cargo.lock
 /GeoLite2-City.mmdb
 /server
 /analysis/.venv
+/output.csv

@@ -31,7 +31,13 @@ For each responding host, I'm enriching with:
 - **HTTP probe**: port 80 open? `Date:` header present?
 - **Clock offset** (ICMP Timestamp hosts only): computed from timestamp fields
 
-## Results
+## Results: Clock Sync Map
+
+<iframe src="plots/clock_sync_map.html" width="100%" height="600" style="border:none;"></iframe>
+
+## Results: ICMP vs HTTP Clock Offset
+
+<iframe src="plots/icmp_vs_http.html" width="100%" height="600" style="border:none;"></iframe>
 
 ## Next Steps
 

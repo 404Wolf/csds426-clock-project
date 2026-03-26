@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use icmp_clocksync::shared;
-use icmp_clocksync::{get_latest_batch, iter_icmp_csv, EnrichedRecord, IcmpTimestampRecord};
+use icmp_clocksync::{EnrichedRecord, IcmpTimestampRecord, get_latest_batch, iter_icmp_csv};
 use itertools::Itertools;
 use rayon::prelude::*;
 
@@ -46,7 +46,10 @@ fn main() {
     // Open output in append mode so we don't clobber existing progress
     let append = resume_after.is_some();
     let out_file = if append {
-        OpenOptions::new().append(true).open(&output_path).expect("failed to open output csv for append")
+        OpenOptions::new()
+            .append(true)
+            .open(&output_path)
+            .expect("failed to open output csv for append")
     } else {
         File::create(&output_path).expect("failed to create output csv")
     };

@@ -27,3 +27,6 @@ analysis-setup:
 
 geo-plot INPUT="data/icmp_clockdiff_analysis.csv" OUTPUT="data/clock_sync_map.html" *ARGS:
     cd analysis && uv run python geo_plot.py ../{{INPUT}} -o ../{{OUTPUT}} {{ARGS}}
+
+icmp-vs-http INPUT="output.csv" OUTPUT="data/icmp_vs_http.html" *ARGS:
+    cd analysis && uv run python icmp_vs_http.py ../{{INPUT}} -o ../{{OUTPUT}} {{ARGS}}

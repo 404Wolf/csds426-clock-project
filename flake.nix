@@ -41,13 +41,20 @@
 
         scan-icmp-time = pkgs.writeShellApplication {
           name = "scan-icmp-time";
-          runtimeInputs = [ zmapPackage pkgs.dig ];
+          runtimeInputs = [
+            zmapPackage
+            pkgs.dig
+          ];
           text = builtins.readFile ./icmp_clocksync/scripts/scan-icmp-time.sh;
         };
 
         scan-http = pkgs.writeShellApplication {
           name = "scan-http";
-          runtimeInputs = [ zmapPackage pkgs.dig pkgs.gnused ];
+          runtimeInputs = [
+            zmapPackage
+            pkgs.dig
+            pkgs.gnused
+          ];
           text = builtins.readFile ./icmp_clocksync/scripts/scan-http.sh;
         };
 
@@ -68,7 +75,8 @@
           default = pkgs.mkShell {
             packages = [
               rustToolchain
-            ] ++ (with pkgs; [
+            ]
+            ++ (with pkgs; [
               just
               openssl.dev
               zmapPackage

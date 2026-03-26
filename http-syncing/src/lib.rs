@@ -24,6 +24,9 @@ pub fn make_agent() -> Agent {
                     .disable_verification(true)
                     .build(),
             )
+            .timeout_connect(Some(std::time::Duration::from_secs(5)))
+            .timeout_send_request(Some(std::time::Duration::from_secs(10)))
+            .timeout_recv_response(Some(std::time::Duration::from_secs(10)))
             .http_status_as_error(false)
             .redirect_auth_headers(ureq::config::RedirectAuthHeaders::SameHost)
             .build(),
@@ -91,52 +94,98 @@ pub fn avg_clock_diff_for_host(_host: &str, rows: &[&Record]) -> Option<TimeDelt
             run_rows.sort_by_key(|r| r.receive_at);
 
             let (right_before, right_after) = run_rows.windows(2).find_map(|w| {
-                (w[0].receive_at.second() > w[1].receive_at.second()).then_some((w[0], w[1]))
+                (w[0].server.second() != w[1].server.second()).then_some((w[0], w[1]))
             })?;
 
             Some(clock_diff_for_pair(right_before, right_after))
         })
-        .min()
+        .min_by_key(|d| d.num_milliseconds().abs())
 }
 
-/// Run one full HTTP clock measurement against a URL: estimate RTT, fire 100 probes
-/// around the second boundary, and compute clock offset.
+/// Run one full HTTP clock measurement against a URL.
+/// Fires multiple bursts (each targeting a successive second boundary) with tight
+/// probe spacing, then picks the best boundary crossing.
 /// Returns `(rtt_us, clock_offset)` or `None` on failure.
 pub fn measure_host(url: &str) -> Option<(u128, TimeDelta)> {
     let agent = make_agent();
-    let rtt_estimate = estimate_rtt(&agent, url).ok()?;
+    let rtt_estimate = match estimate_rtt(&agent, url) {
+        Ok(rtt) => rtt,
+        Err(e) => {
+            eprintln!("  RTT estimation failed: {e}");
+            return None;
+        }
+    };
 
-    let step_micros: i64 = 300;
-    let entries: i64 = 100;
+    eprintln!("  rtt estimate: {}µs", rtt_estimate);
+
+    // 5 independent chances to catch a second boundary (~1s apart)
+    let num_bursts: u32 = 5;
+    // 60 parallel HEAD requests per burst, densely covering the window
+    let probes_per_burst: i64 = 60;
+    // 200µs between each probe's scheduled send time (this is the tightest boundary pair we can find)
+    let step_micros: i64 = 200;
     let rtt_i64 = rtt_estimate as i64;
-    let center = -rtt_i64;
-    let half_span = (entries / 2) * step_micros;
-    let jitter = rand::random::<i64>().abs() % step_micros.max(1);
-    let start = (center - half_span) + jitter;
+    // probes spread +/- 6ms around center (60/2 * 200us = 6ms); total 12ms
+    // window is wide enough to absorb typical RTT jitter
+    let half_span = (probes_per_burst / 2) * step_micros;
 
-    let hit_at: Vec<i64> = (0..entries).map(|n| start + n * step_micros).collect();
+    let mut all_rows: Vec<Record> = Vec::new();
 
-    let mut rows: Vec<Record> = hit_at
-        .par_iter()
-        .filter_map(|&i| {
-            let req_url = format!("{}?q={}", url, rand::random::<u64>());
-            let (server, sent_at, receive_at) =
-                sleep_to_edge_and_get_date(&agent, &req_url, i).ok()?;
-            Some(Record {
-                host: url.to_string(),
-                run_num: 0,
-                offset_micros: i,
-                server,
-                send_at: sent_at,
-                receive_at,
+    for burst in 0..num_bursts {
+        // send one RTT before the local second tick so the request
+        // arrives at the server right around its second boundary
+        let center = -rtt_i64;
+        let jitter = rand::random::<i64>().abs() % step_micros.max(1);
+        let start = (center - half_span) + jitter;
+
+        let hit_at: Vec<i64> = (0..probes_per_burst)
+            .map(|n| start + n * step_micros)
+            .collect();
+
+        let mut rows: Vec<Record> = hit_at
+            .par_iter()
+            .filter_map(|&i| {
+                let req_url = format!("{}?q={}", url, rand::random::<u64>());
+                let (server, sent_at, receive_at) =
+                    sleep_to_edge_and_get_date(&agent, &req_url, i).ok()?;
+                Some(Record {
+                    host: url.to_string(),
+                    run_num: burst,
+                    offset_micros: i,
+                    server,
+                    send_at: sent_at,
+                    receive_at,
+                })
             })
-        })
-        .collect();
+            .collect();
 
-    rows.sort_by_key(|r| r.receive_at);
+        let hit = rows
+            .iter()
+            .map(|r| r.server.second())
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            > 1;
+        eprintln!(
+            "  burst {}/{}: {}/{} probes, boundary {}",
+            burst + 1,
+            num_bursts,
+            rows.len(),
+            probes_per_burst,
+            if hit { "HIT" } else { "miss" }
+        );
 
-    let row_refs: Vec<&Record> = rows.iter().collect();
-    let diff = avg_clock_diff_for_host(url, &row_refs)?;
+        rows.sort_by_key(|r| r.receive_at);
+        all_rows.append(&mut rows);
+    }
+
+    let row_refs: Vec<&Record> = all_rows.iter().collect();
+    let diff = match avg_clock_diff_for_host(url, &row_refs) {
+        Some(d) => d,
+        None => {
+            eprintln!("  no second boundary found across {} bursts", num_bursts);
+            return None;
+        }
+    };
 
     Some((rtt_estimate, diff))
 }

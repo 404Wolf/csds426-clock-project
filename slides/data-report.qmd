@@ -17,19 +17,33 @@ format:
 - Scanned for hosts that respond to ICMP Timestamp requests
 - And 3% of hosts do! (10% support regular ICMP echo)
 
-* My scan only includes 30% of the internet. The server got disconnected part way through :(
+\* My scan only includes 30% of the internet. The server got disconnected part way through :(
 
 ## Results
 
-## Enrichment Pipeline
+## Enrichment
 
-For each responding host, I'm enriching with:
+For each responding host, I'm adding:
 
 - **Reverse DNS** hostname
 - **ICMP ping** RTT (ms)
 - **GeoIP** (MaxMind): geo data like city, lat long
 - **HTTP probe**: port 80 open? `Date:` header present?
 - **Clock offset** (ICMP Timestamp hosts only): computed from timestamp fields
+
+## Enriched Data
+
+```
+batch_num,ip,hostname,rtt_ms,is_http,had_date,country,city,latitude,longitude,daddr,otime,rtime,ttime,clock_offset_ms
+0,81.245.55.131,131.55-245-81.adsl-dyn.isp.belgacom.be,18.0,false,false,BE,Brussels,50.8274,4.348,157.90.252.35,78205546,1401094144,1401094144,1322888589
+...
+```
+
+```
+batch_num,ip,hostname,rtt_ms,is_http,had_date,country,city,latitude,longitude,daddr,otime,rtime,ttime,clock_offset_ms
+0,87.156.20.214,p579c14d6.dip0.t-ipconnect.de,135.0,false,false,DE,Aschaffenburg,49.9618,9.1634,,,,,
+...
+```
 
 ## Results: Clock Sync Map
 
@@ -42,4 +56,7 @@ For each responding host, I'm enriching with:
 ## Next Steps
 
 - Full internet zmap scan
-<!-- TODO: add more here -->
+- Explore the data further -- anything else I could enrich with? AS?
+- Fingerprinting. OS?
+- Do scans from more places?
+- Stats on ping vs clockdiff

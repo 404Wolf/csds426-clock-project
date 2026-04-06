@@ -1,11 +1,8 @@
 scan-icmp-ping:
-    sudo env PATH="$PATH" zmap --probe-module=icmp_echoscan 0.0.0.0/0 --output-module=csv --output-fields="*" -r 100000 | gzip > data/icmp_echo.csv.gz && chown "$USER" data/icmp_echo.csv.gz
+    sudo env PATH="$PATH" bash icmp_clocksync/scripts/scan-icmp-ping.sh
 
-scan-icmp-test:
-    sudo env PATH="$PATH" bash icmp_clocksync/scripts/scan-icmp-time.sh 1
-
-scan-icmp:
-    sudo env PATH="$PATH" bash icmp_clocksync/scripts/scan-icmp-time.sh 0
+scan-icmp-clockdiff:
+    sudo env PATH="$PATH" bash icmp_clocksync/scripts/scan-icmp-time.sh
 
 enrich-ips-clockdiff-example INPUT="data/icmp_timestamp_example.csv" OUTPUT="data/icmp_timestamp_analysis_example.csv":
     cargo run --bin enrich-ips-clockdiff -- {{INPUT}} {{OUTPUT}}

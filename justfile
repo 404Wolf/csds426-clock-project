@@ -1,5 +1,5 @@
-scan-icmp-ping NUM_IPS="200":
-    sudo env PATH="$PATH" bash icmp_clocksync/scripts/scan-icmp-ping.sh {{NUM_IPS}}
+scan-icmp-ping:
+    sudo env PATH="$PATH" zmap --probe-module=icmp_echoscan 0.0.0.0/0 --output-module=csv --output-fields="*" -r 100000 | gzip > data/icmp_echo.csv.gz && chown "$USER" data/icmp_echo.csv.gz
 
 scan-icmp-test:
     sudo env PATH="$PATH" bash icmp_clocksync/scripts/scan-icmp-time.sh 1

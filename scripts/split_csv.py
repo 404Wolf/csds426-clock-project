@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
 import argparse
-import csv
 import sys
 
 def split_csv(path, n):
-    with open(path, newline="") as f:
-        reader = csv.reader(f)
-        header = next(reader)
+    with open(path, "rb") as f:
+        header = f.readline()
         chunk_idx = 0
-        out = None
-        writer = None
         count = 0
+        out = None
 
-        for row in reader:
+        for line in f:
             if out is None:
-                out = open(f"{path}.{chunk_idx:04d}.csv", "w", newline="")
-                writer = csv.writer(out)
-                writer.writerow(header)
+                out = open(f"{path}.{chunk_idx:04d}.csv", "wb")
+                out.write(header)
                 count = 0
-            writer.writerow(row)
+            out.write(line)
             count += 1
             if count == n:
                 out.close()

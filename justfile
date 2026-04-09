@@ -14,7 +14,11 @@ scan-http INPUT OUTPUT *ARGS:
     cd http-syncing && cargo run --release --bin scanner -- {{INPUT}} {{OUTPUT}} {{ARGS}}
 
 enrich-http INPUT OUTPUT *ARGS:
-    cargo run --release --bin enrich-http -- {{INPUT}} {{OUTPUT}} {{ARGS}}
+    #!/usr/bin/env bash
+    tmp=$(mktemp --suffix=.csv)
+    cargo run --release --bin enrich-http -- {{INPUT}} "$tmp" {{ARGS}}
+    tar czf {{OUTPUT}} -C "$(dirname "$tmp")" "$(basename "$tmp")"
+    rm "$tmp"
 
 analysis-setup:
     cd analysis && uv sync

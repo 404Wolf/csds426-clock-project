@@ -4,9 +4,6 @@ scan-icmp-ping:
 scan-icmp-clockdiff:
     sudo env PATH="$PATH" bash icmp_clocksync/scripts/scan-icmp-time.sh
 
-enrich-ips-clockdiff-example INPUT="data/icmp_timestamp_example.csv" OUTPUT="data/icmp_timestamp_analysis_example.csv":
-    cargo run --bin enrich-ips-clockdiff -- {{INPUT}} {{OUTPUT}}
-
 enrich-ips-clockdiff INPUT OUTPUT *ARGS:
     cargo run --release --bin enrich-ips-clockdiff -- {{INPUT}} {{OUTPUT}} {{ARGS}}
 

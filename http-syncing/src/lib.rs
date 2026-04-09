@@ -1,3 +1,4 @@
+use anyhow::Result;
 use chrono::{DateTime, TimeDelta, Timelike, Utc};
 use itertools::Itertools;
 use rayon::prelude::*;
@@ -14,6 +15,8 @@ pub struct Record {
     pub send_at: DateTime<Utc>,
     pub receive_at: DateTime<Utc>,
 }
+
+const SANITY_CHECK_MAX_OFFSET_SECS: i64 = 5;
 
 pub fn make_agent() -> Agent {
     Agent::new_with_config(
@@ -37,8 +40,7 @@ pub fn sleep_to_edge_and_get_date(
     agent: &Agent,
     url: &str,
     offset_micros: i64,
-) -> Result<(DateTime<Utc>, DateTime<Utc>, DateTime<Utc>), Box<dyn std::error::Error + Send + Sync>>
-{
+) -> Result<(DateTime<Utc>, DateTime<Utc>, DateTime<Utc>)> {
     let time_now = chrono::Utc::now();
     let micros_until_next_second =
         1_000_000i64 - (time_now.timestamp_subsec_micros() as i64 % 1_000_000i64);
@@ -47,25 +49,30 @@ pub fn sleep_to_edge_and_get_date(
     spin_sleep::sleep(std::time::Duration::from_micros(total_micros as u64));
     let sent_at = chrono::Utc::now();
 
+    let (reported_date, receive_at, _rtt) = request_http_date(agent, url)?;
+
+    Ok((reported_date, sent_at, receive_at))
+}
+
+pub fn request_http_date(agent: &Agent, url: &str) -> Result<(DateTime<Utc>, DateTime<Utc>, u128)> {
+    let start = std::time::Instant::now();
     let resp = agent.head(url).call()?;
+    let rtt_micros = start.elapsed().as_micros();
     let receive_at = chrono::Utc::now();
 
     let date_header = resp
         .headers()
         .get("date")
-        .ok_or("no date header")?
+        .ok_or_else(|| anyhow::anyhow!("no date header"))?
         .to_str()?;
 
     let reported_date = httpdate::parse_http_date(date_header)?;
     let reported_date: DateTime<Utc> = DateTime::<Utc>::from(reported_date);
 
-    Ok((reported_date, sent_at, receive_at))
+    Ok((reported_date, receive_at, rtt_micros))
 }
 
-pub fn estimate_rtt(
-    agent: &Agent,
-    url: &str,
-) -> Result<u128, Box<dyn std::error::Error + Send + Sync>> {
+pub fn estimate_rtt(agent: &Agent, url: &str) -> Result<u128> {
     let mut rtt_sum_micros: u128 = 0;
 
     for _ in 0..5 {
@@ -105,18 +112,21 @@ pub fn avg_clock_diff_for_host(_host: &str, rows: &[&Record]) -> Option<TimeDelt
 /// Run one full HTTP clock measurement against a URL.
 /// Fires multiple bursts (each targeting a successive second boundary) with tight
 /// probe spacing, then picks the best boundary crossing.
-/// Returns `(rtt_us, clock_offset)` or `None` on failure.
-pub fn measure_host(url: &str) -> Option<(u128, TimeDelta)> {
+/// Returns `(rtt_us, clock_offset)` on success.
+pub fn measure_host(url: &str) -> Result<(u128, TimeDelta)> {
     let agent = make_agent();
-    let rtt_estimate = match estimate_rtt(&agent, url) {
-        Ok(rtt) => rtt,
-        Err(e) => {
-            eprintln!("  RTT estimation failed: {e}");
-            return None;
-        }
-    };
 
-    eprintln!("  rtt estimate: {}µs", rtt_estimate);
+    // Before we proceed, do a simple sanity check: maybe the host is off by
+    // more than SANITY_CHECK_MAX_OFFSET_SECS seconds. If so, bail — the
+    // measurement would be meaningless.
+    let (sanity_date, _, sanity_rtt) = request_http_date(&agent, url)?;
+    let now = chrono::Utc::now();
+    if (sanity_date - now).num_seconds().abs() > SANITY_CHECK_MAX_OFFSET_SECS {
+        // HTTP Date only has second resolution, so this offset is coarse.
+        return Ok((sanity_rtt, sanity_date - now));
+    }
+
+    let rtt_estimate = estimate_rtt(&agent, url)?;
 
     // 5 independent chances to catch a second boundary (~1s apart)
     let num_bursts: u32 = 5;
@@ -179,13 +189,8 @@ pub fn measure_host(url: &str) -> Option<(u128, TimeDelta)> {
     }
 
     let row_refs: Vec<&Record> = all_rows.iter().collect();
-    let diff = match avg_clock_diff_for_host(url, &row_refs) {
-        Some(d) => d,
-        None => {
-            eprintln!("  no second boundary found across {} bursts", num_bursts);
-            return None;
-        }
-    };
+    let diff = avg_clock_diff_for_host(url, &row_refs)
+        .ok_or_else(|| anyhow::anyhow!("no second boundary found across {} bursts", num_bursts))?;
 
-    Some((rtt_estimate, diff))
+    Ok((rtt_estimate, diff))
 }

@@ -14,3 +14,4 @@ serde = { version = "1", features = ["derive"] }
 rand = "0.10.0"
 rayon = "1.11.0"
 itertools = "0.14"
+anyhow = "1"

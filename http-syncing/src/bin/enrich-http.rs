@@ -83,7 +83,7 @@ fn main() {
         eprintln!("[{}/{}] {}", i + 1, candidates.len(), rec.ip);
 
         match clocks::measure_host(&url) {
-            Some((http_rtt_us, http_clock_offset)) => {
+            Ok((http_rtt_us, http_clock_offset)) => {
                 let out = OutputRecord {
                     ip: rec.ip.clone(),
                     hostname: rec.hostname.clone(),
@@ -104,8 +104,8 @@ fn main() {
                     http_clock_offset.num_milliseconds()
                 );
             }
-            None => {
-                eprintln!("  failed, skipping");
+            Err(e) => {
+                eprintln!("  failed, skipping: {e}");
             }
         }
     }

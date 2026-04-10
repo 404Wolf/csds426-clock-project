@@ -1,8 +1,12 @@
+use std::fs::{File, OpenOptions};
 use std::path::PathBuf;
 
 use clap::Parser;
-use rand::seq::SliceRandom;
+use itertools::Itertools;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+
+const BATCH_SIZE: usize = 20;
 
 #[derive(Parser)]
 #[command(about = "Measure HTTP clock offset for hosts with ICMP timestamp data")]
@@ -11,9 +15,6 @@ struct Args {
     input: PathBuf,
     /// Output comparison CSV
     output: PathBuf,
-    /// Number of hosts to sample
-    #[arg(long)]
-    sample: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -38,6 +39,7 @@ struct InputRecord {
 
 #[derive(Debug, Serialize)]
 struct OutputRecord {
+    batch_num: u64,
     ip: String,
     hostname: String,
     icmp_rtt_ms: f64,
@@ -50,63 +52,111 @@ struct OutputRecord {
     longitude: f64,
 }
 
+#[derive(Debug, Deserialize)]
+struct BatchOnly {
+    batch_num: u64,
+}
+
+fn get_latest_batch(path: &PathBuf) -> Option<u64> {
+    let file = File::open(path).ok()?;
+    let mut rdr = csv::ReaderBuilder::new()
+        .flexible(true)
+        .from_reader(std::io::BufReader::new(file));
+    let mut max_batch = None;
+    for rec in rdr.deserialize::<BatchOnly>().flatten() {
+        max_batch = Some(max_batch.map_or(rec.batch_num, |m: u64| m.max(rec.batch_num)));
+    }
+    max_batch
+}
+
 fn main() {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(50)
+        .build_global()
+        .unwrap();
+
     let args = Args::parse();
 
+    let resume_after = get_latest_batch(&args.output);
+    let skip_rows = resume_after.map_or(0, |b| (b as usize + 1) * BATCH_SIZE);
+
+    if let Some(b) = resume_after {
+        eprintln!("resuming after batch {b}, skipping {skip_rows} rows");
+    }
+
+    let in_file = File::open(&args.input).expect("failed to open input CSV");
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(true)
         .flexible(true)
-        .from_path(&args.input)
-        .expect("failed to open input CSV");
+        .from_reader(std::io::BufReader::new(in_file));
 
-    let mut candidates: Vec<InputRecord> = rdr
-        .deserialize()
+    let candidates = rdr
+        .deserialize::<InputRecord>()
         .filter_map(|r| r.ok())
-        .filter(|r: &InputRecord| r.had_date && r.clock_offset_ms.is_some())
-        .collect();
+        .filter(|r| r.had_date && r.clock_offset_ms.is_some())
+        .skip(skip_rows);
 
-    eprintln!(
-        "found {} candidates with had_date=true and clock_offset_ms present",
-        candidates.len()
-    );
+    let append = resume_after.is_some();
+    let out_file = if append {
+        OpenOptions::new()
+            .append(true)
+            .open(&args.output)
+            .expect("failed to open output CSV for append")
+    } else {
+        File::create(&args.output).expect("failed to create output CSV")
+    };
+    let mut wtr = csv::WriterBuilder::new()
+        .has_headers(!append)
+        .from_writer(out_file);
 
-    let mut rng = rand::rng();
-    candidates.shuffle(&mut rng);
-    candidates.truncate(args.sample);
+    let start_batch = resume_after.map_or(0, |b| b + 1);
 
-    eprintln!("measuring {} hosts", candidates.len());
+    for (i, chunk) in candidates.chunks(BATCH_SIZE).into_iter().enumerate() {
+        let batch_num = start_batch + i as u64;
+        let batch: Vec<InputRecord> = chunk.collect();
 
-    let mut wtr = csv::Writer::from_path(&args.output).expect("failed to open output CSV");
+        eprintln!("batch {batch_num} ({} hosts)", batch.len());
 
-    for (i, rec) in candidates.iter().enumerate() {
-        let url = format!("http://{}", rec.ip);
-        eprintln!("[{}/{}] {}", i + 1, candidates.len(), rec.ip);
+        let results: Vec<Option<OutputRecord>> = batch
+            .par_iter()
+            .map(|rec| {
+                let url = format!("http://{}", rec.ip);
+                eprintln!("  measuring {}", rec.ip);
+                match clocks::measure_host(&url) {
+                    Ok((http_rtt_us, http_clock_offset)) => {
+                        eprintln!(
+                            "  {} icmp_offset={}ms http_offset={}ms",
+                            rec.ip,
+                            rec.clock_offset_ms.unwrap(),
+                            http_clock_offset.num_milliseconds()
+                        );
+                        Some(OutputRecord {
+                            batch_num,
+                            ip: rec.ip.clone(),
+                            hostname: rec.hostname.clone(),
+                            icmp_rtt_ms: rec.rtt_ms,
+                            icmp_clock_offset_ms: rec.clock_offset_ms.unwrap(),
+                            http_rtt_us: http_rtt_us as u64,
+                            http_clock_offset_ms: http_clock_offset.num_milliseconds(),
+                            country: rec.country.clone(),
+                            city: rec.city.clone(),
+                            latitude: rec.latitude,
+                            longitude: rec.longitude,
+                        })
+                    }
+                    Err(e) => {
+                        eprintln!("  {} failed, skipping: {e}", rec.ip);
+                        None
+                    }
+                }
+            })
+            .collect();
 
-        match clocks::measure_host(&url) {
-            Ok((http_rtt_us, http_clock_offset)) => {
-                let out = OutputRecord {
-                    ip: rec.ip.clone(),
-                    hostname: rec.hostname.clone(),
-                    icmp_rtt_ms: rec.rtt_ms,
-                    icmp_clock_offset_ms: rec.clock_offset_ms.unwrap(),
-                    http_rtt_us: http_rtt_us as u64,
-                    http_clock_offset_ms: http_clock_offset.num_milliseconds(),
-                    country: rec.country.clone(),
-                    city: rec.city.clone(),
-                    latitude: rec.latitude,
-                    longitude: rec.longitude,
-                };
-                wtr.serialize(&out).expect("failed to write row");
-                wtr.flush().expect("failed to flush");
-                eprintln!(
-                    "  icmp_offset={}ms http_offset={}ms",
-                    rec.clock_offset_ms.unwrap(),
-                    http_clock_offset.num_milliseconds()
-                );
-            }
-            Err(e) => {
-                eprintln!("  failed, skipping: {e}");
-            }
+        let succeeded = results.iter().filter(|r| r.is_some()).count();
+        for out in results.into_iter().flatten() {
+            wtr.serialize(&out).expect("failed to write row");
         }
+        wtr.flush().expect("failed to flush");
+        eprintln!("batch {batch_num} done ({succeeded}/{} succeeded)", batch.len());
     }
 }

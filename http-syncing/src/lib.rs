@@ -128,8 +128,8 @@ pub fn measure_host(url: &str) -> Result<(u128, TimeDelta)> {
 
     let rtt_estimate = estimate_rtt(&agent, url)?;
 
-    // 5 independent chances to catch a second boundary (~1s apart)
-    let num_bursts: u32 = 5;
+    // 10 independent chances to catch a second boundary (~1s apart)
+    let num_bursts: u32 = 10;
     // 60 parallel HEAD requests per burst, densely covering the window
     let probes_per_burst: i64 = 60;
     // 200µs between each probe's scheduled send time (this is the tightest boundary pair we can find)

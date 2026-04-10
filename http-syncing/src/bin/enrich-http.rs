@@ -71,7 +71,7 @@ fn get_latest_batch(path: &PathBuf) -> Option<u64> {
 
 fn main() {
     rayon::ThreadPoolBuilder::new()
-        .num_threads(50)
+        .num_threads(1000)
         .build_global()
         .unwrap();
 

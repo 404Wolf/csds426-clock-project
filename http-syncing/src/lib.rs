@@ -4,6 +4,7 @@ use itertools::Itertools;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use ureq::Agent;
+use ureq::http::Method;
 use ureq::tls::{TlsConfig, TlsProvider};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -40,6 +41,7 @@ pub fn sleep_to_edge_and_get_date(
     agent: &Agent,
     url: &str,
     offset_micros: i64,
+    method: &str,
 ) -> Result<(DateTime<Utc>, DateTime<Utc>, DateTime<Utc>)> {
     let time_now = chrono::Utc::now();
     let micros_until_next_second =
@@ -49,14 +51,28 @@ pub fn sleep_to_edge_and_get_date(
     spin_sleep::sleep(std::time::Duration::from_micros(total_micros as u64));
     let sent_at = chrono::Utc::now();
 
-    let (reported_date, receive_at, _rtt) = request_http_date(agent, url)?;
+    let (reported_date, receive_at, _rtt) = request_http_date(agent, url, method)?;
 
     Ok((reported_date, sent_at, receive_at))
 }
 
-pub fn request_http_date(agent: &Agent, url: &str) -> Result<(DateTime<Utc>, DateTime<Utc>, u128)> {
+fn call_method(agent: &Agent, url: &str, method: &str) -> Result<ureq::http::Response<ureq::Body>> {
+    let m = Method::from_bytes(method.as_bytes())
+        .map_err(|e| anyhow::anyhow!("invalid HTTP method: {e}"))?;
+    let req = ureq::http::Request::builder()
+        .method(m)
+        .uri(url)
+        .body(())?;
+    let configured = agent
+        .configure_request(req)
+        .allow_non_standard_methods(true)
+        .build();
+    Ok(agent.run(configured)?)
+}
+
+pub fn request_http_date(agent: &Agent, url: &str, method: &str) -> Result<(DateTime<Utc>, DateTime<Utc>, u128)> {
     let start = std::time::Instant::now();
-    let resp = agent.head(url).call()?;
+    let resp = call_method(agent, url, method)?;
     let rtt_micros = start.elapsed().as_micros();
     let receive_at = chrono::Utc::now();
 
@@ -72,12 +88,12 @@ pub fn request_http_date(agent: &Agent, url: &str) -> Result<(DateTime<Utc>, Dat
     Ok((reported_date, receive_at, rtt_micros))
 }
 
-pub fn estimate_rtt(agent: &Agent, url: &str) -> Result<u128> {
+pub fn estimate_rtt(agent: &Agent, url: &str, method: &str) -> Result<u128> {
     let mut rtt_sum_micros: u128 = 0;
 
     for _ in 0..5 {
         let start = std::time::Instant::now();
-        agent.head(url).call()?;
+        call_method(agent, url, method)?;
         rtt_sum_micros += start.elapsed().as_micros();
     }
 
@@ -109,28 +125,34 @@ pub fn avg_clock_diff_for_host(_host: &str, rows: &[&Record]) -> Option<TimeDelt
         .min_by_key(|d| d.num_milliseconds().abs())
 }
 
-/// Run one full HTTP clock measurement against a URL.
+/// Run one full HTTP clock measurement against a URL using HEAD requests.
+/// Returns `(rtt_us, clock_offset)` on success.
+pub fn measure_host(url: &str) -> Result<(u128, TimeDelta)> {
+    measure_host_with_method(url, "HEAD")
+}
+
+/// Run one full HTTP clock measurement against a URL using the given HTTP method.
 /// Fires multiple bursts (each targeting a successive second boundary) with tight
 /// probe spacing, then picks the best boundary crossing.
 /// Returns `(rtt_us, clock_offset)` on success.
-pub fn measure_host(url: &str) -> Result<(u128, TimeDelta)> {
+pub fn measure_host_with_method(url: &str, method: &str) -> Result<(u128, TimeDelta)> {
     let agent = make_agent();
 
     // Before we proceed, do a simple sanity check: maybe the host is off by
     // more than SANITY_CHECK_MAX_OFFSET_SECS seconds. If so, bail — the
     // measurement would be meaningless.
-    let (sanity_date, _, sanity_rtt) = request_http_date(&agent, url)?;
+    let (sanity_date, _, sanity_rtt) = request_http_date(&agent, url, method)?;
     let now = chrono::Utc::now();
     if (sanity_date - now).num_seconds().abs() > SANITY_CHECK_MAX_OFFSET_SECS {
         // HTTP Date only has second resolution, so this offset is coarse.
         return Ok((sanity_rtt, sanity_date - now));
     }
 
-    let rtt_estimate = estimate_rtt(&agent, url)?;
+    let rtt_estimate = estimate_rtt(&agent, url, method)?;
 
     // 10 independent chances to catch a second boundary (~1s apart)
     let num_bursts: u32 = 10;
-    // 60 parallel HEAD requests per burst, densely covering the window
+    // 60 parallel requests per burst, densely covering the window
     let probes_per_burst: i64 = 60;
     // 200µs between each probe's scheduled send time (this is the tightest boundary pair we can find)
     let step_micros: i64 = 200;
@@ -157,7 +179,7 @@ pub fn measure_host(url: &str) -> Result<(u128, TimeDelta)> {
             .filter_map(|&i| {
                 let req_url = format!("{}?q={}", url, rand::random::<u64>());
                 let (server, sent_at, receive_at) =
-                    sleep_to_edge_and_get_date(&agent, &req_url, i).ok()?;
+                    sleep_to_edge_and_get_date(&agent, &req_url, i, method).ok()?;
                 Some(Record {
                     host: url.to_string(),
                     run_num: burst,

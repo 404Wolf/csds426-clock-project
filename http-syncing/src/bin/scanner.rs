@@ -58,7 +58,7 @@ fn main() {
         .par_iter()
         .flat_map(|(url, run_num)| {
             let agent = clocks::make_agent();
-            let rtt_estimate = clocks::estimate_rtt(&agent, url).expect("failed to estimate RTT");
+            let rtt_estimate = clocks::estimate_rtt(&agent, url, "HEAD").expect("failed to estimate RTT");
 
             let step_micros: i64 = 300; // ~0.3ms
             let entries: i64 = 100;
@@ -86,7 +86,7 @@ fn main() {
                 .map(|i| {
                     let req_url = format!("{}?q={}", url, rand::random::<u64>());
                     let (server, sent_at, receive_at) =
-                        clocks::sleep_to_edge_and_get_date(&agent, req_url.as_str(), i)
+                        clocks::sleep_to_edge_and_get_date(&agent, req_url.as_str(), i, "HEAD")
                             .expect("failed to get date");
                     (url.clone(), *run_num, i, server, sent_at, receive_at)
                 })

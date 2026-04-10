@@ -8,7 +8,7 @@ use icmp_clocksync::{EnrichedRecord, IcmpTimestampRecord, get_latest_batch, iter
 use itertools::Itertools;
 use rayon::prelude::*;
 
-const BATCH_SIZE: usize = 100;
+const BATCH_SIZE: usize = 1000;
 
 #[derive(Parser)]
 struct Args {
@@ -25,6 +25,11 @@ struct Args {
 }
 
 fn main() {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(1000)
+        .build_global()
+        .unwrap();
+
     let args = Args::parse();
     let input_path = args.input;
     let output_path = args.output;

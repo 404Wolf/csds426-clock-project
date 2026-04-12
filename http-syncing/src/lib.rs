@@ -31,9 +31,9 @@ pub struct BoundaryPair {
 }
 
 const SANITY_CHECK_MAX_OFFSET_SECS: i64 = 5;
-const INITIAL_HALF_SPAN_US: i64 = 2_000_000; // +/-5s covers even badly-synced servers
-const PROBES: i64 = 20;
-const NUM_ROUNDS: u32 = 10;
+const INITIAL_HALF_SPAN_US: i64 = 1_400_000; // +/-5s covers even badly-synced servers
+const PROBES: i64 = 10;
+const NUM_ROUNDS: u32 = 7;
 
 pub fn make_agent() -> Agent {
     Agent::new_with_config(

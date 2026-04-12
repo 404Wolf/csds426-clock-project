@@ -79,7 +79,7 @@ fn main() {
     env_logger::init();
 
     rayon::ThreadPoolBuilder::new()
-        .num_threads(10)
+        .num_threads(20)
         .build_global()
         .unwrap();
 

@@ -31,9 +31,9 @@ pub struct BoundaryPair {
 }
 
 const SANITY_CHECK_MAX_OFFSET_SECS: i64 = 5;
-const INITIAL_HALF_SPAN_US: i64 = 2_000_000; // ±5s covers even badly-synced servers
-const PROBES: i64 = 4;
-const NUM_ROUNDS: u32 = 20;
+const INITIAL_HALF_SPAN_US: i64 = 2_000_000; // +/-5s covers even badly-synced servers
+const PROBES: i64 = 20;
+const NUM_ROUNDS: u32 = 10;
 
 pub fn make_agent() -> Agent {
     Agent::new_with_config(
@@ -161,7 +161,7 @@ fn search(
         })
         .collect();
 
-    rows.sort_by_key(|r| r.offset_micros);
+    rows.sort_by_key(|r| (r.offset_micros, r.server));
 
     if let Some(pair) = rows.windows(2).find_map(|w| {
         (w[0].server.second() != w[1].server.second()).then_some(BoundaryPair {

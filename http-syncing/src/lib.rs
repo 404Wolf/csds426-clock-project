@@ -30,10 +30,29 @@ pub struct BoundaryPair {
     pub after: Record,
 }
 
+/// Result for a single search round.
+pub struct RoundResult {
+    pub round_num: u32,
+    /// Clock offset estimate from this round's boundary pair (None if no boundary found).
+    pub diff_ms: Option<i64>,
+    /// Half-span of the search window for this round, in milliseconds.
+    pub window_half_ms: i64,
+    /// Center of the search window for this round, in microseconds from the local second boundary.
+    pub center_us: i64,
+}
+
+/// Full result of an HTTP clock measurement.
+pub struct MeasurementResult {
+    /// Final clock offset (None = frozen clock — no second boundary found in first round).
+    pub offset: Option<TimeDelta>,
+    /// Per-round details, in round order.
+    pub rounds: Vec<RoundResult>,
+}
+
 const SANITY_CHECK_MAX_OFFSET_SECS: i64 = 5;
-const INITIAL_HALF_SPAN_US: i64 = 1_300_000; // +/-5s covers even badly-synced servers
+const INITIAL_HALF_SPAN_US: i64 = 1_300_000;
 const PROBES: i64 = 10;
-const NUM_ROUNDS: u32 = 7;
+pub const NUM_ROUNDS: u32 = 10;
 
 pub fn make_agent() -> Agent {
     Agent::new_with_config(
@@ -114,20 +133,19 @@ pub fn clock_diff_for_pair(pair: &BoundaryPair) -> TimeDelta {
     let rtt = ((pair.after.receive_at - pair.after.send_at)
         + (pair.before.receive_at - pair.before.send_at))
         / 2;
-    // The new second on the server, minus our time then (the time we sent +
-    // rtt/2 is our time at that time)
     pair.after.server - (pair.after.send_at + rtt / 2)
 }
 
 /// Run one full HTTP clock measurement against a URL using HEAD requests.
-/// Returns `Ok(None)` if the server appears to have a frozen clock (no second boundary found).
-pub fn measure_host(url: &str) -> Result<Option<TimeDelta>> {
-    measure_host_with_method(url, "HEAD")
+/// Returns a `MeasurementResult` with per-round details.
+/// `offset` is None if the server appears to have a frozen clock.
+pub fn measure_host(url: &str) -> Result<MeasurementResult> {
+    measure_host_with_method(url, "HEAD", NUM_ROUNDS)
 }
 
 /// Probe `PROBES` offsets uniformly across [center ± half_span],
 /// then recurse with the span halved and the center narrowed to the boundary found.
-/// Returns the boundary pair from the final round.
+/// Returns `(final_pair, per_round_results)` in round order.
 fn search(
     agent: &Agent,
     url: &str,
@@ -136,9 +154,9 @@ fn search(
     half_span_us: i64,
     rounds_left: u32,
     round_num: u32,
-) -> Option<BoundaryPair> {
+) -> (Option<BoundaryPair>, Vec<RoundResult>) {
     if rounds_left == 0 {
-        return None;
+        return (None, vec![]);
     }
 
     let step = (2 * half_span_us) / (PROBES - 1);
@@ -171,59 +189,65 @@ fn search(
         })
     }) {
         let new_center = (pair.before.offset_micros + pair.after.offset_micros) / 2;
+        let diff_ms = clock_diff_for_pair(&pair).num_milliseconds();
         info!(
-            "round {}: HIT boundary at {}µs (±{}ms window)",
-            round_num,
-            new_center,
-            half_span_us / 1000
+            "round {}: HIT boundary at {}µs (±{}ms window), diff={}ms",
+            round_num, new_center, half_span_us / 1000, diff_ms
         );
-        Some(
-            search(
-                agent,
-                url,
-                method,
-                new_center,
-                half_span_us / 2,
-                rounds_left - 1,
-                round_num + 1,
-            )
-            .unwrap_or(pair),
-        )
+        let round_result = RoundResult {
+            round_num,
+            diff_ms: Some(diff_ms),
+            window_half_ms: half_span_us / 1000,
+            center_us: new_center,
+        };
+        let (final_pair, mut rest) = search(
+            agent, url, method, new_center, half_span_us / 2, rounds_left - 1, round_num + 1,
+        );
+        rest.insert(0, round_result);
+        (Some(final_pair.unwrap_or(pair)), rest)
     } else {
         info!("round {}: miss (±{}ms window)", round_num, half_span_us / 1000);
-        if round_num == 1 {
-            return None; // no boundary in widest window — frozen clock
-        }
-        search(
-            agent,
-            url,
-            method,
+        let round_result = RoundResult {
+            round_num,
+            diff_ms: None,
+            window_half_ms: half_span_us / 1000,
             center_us,
-            half_span_us / 2,
-            rounds_left - 1,
-            round_num + 1,
-        )
+        };
+        if round_num == 1 {
+            return (None, vec![round_result]); // frozen clock — bail immediately
+        }
+        let (final_pair, mut rest) = search(
+            agent, url, method, center_us, half_span_us / 2, rounds_left - 1, round_num + 1,
+        );
+        rest.insert(0, round_result);
+        (final_pair, rest)
     }
 }
 
 /// Run one full HTTP clock measurement against a URL using the given HTTP method.
 /// Uses recursive binary search to home in on the second boundary, then computes
 /// the clock offset from the tightest boundary pair found.
-/// Returns `Ok(None)` if the server appears to have a frozen clock (no second boundary found).
-pub fn measure_host_with_method(url: &str, method: &str) -> Result<Option<TimeDelta>> {
+pub fn measure_host_with_method(url: &str, method: &str, num_rounds: u32) -> Result<MeasurementResult> {
     let agent = make_agent();
 
     let (sanity_date, _) = request_http_date(&agent, url, method)?;
     let now = chrono::Utc::now();
     if (sanity_date - now).num_seconds().abs() > SANITY_CHECK_MAX_OFFSET_SECS {
-        return Ok(Some(sanity_date - now));
+        return Ok(MeasurementResult {
+            offset: Some(sanity_date - now),
+            rounds: vec![],
+        });
     }
 
-    match search(&agent, url, method, 0, INITIAL_HALF_SPAN_US, NUM_ROUNDS, 1) {
+    let (pair, rounds) = search(&agent, url, method, 0, INITIAL_HALF_SPAN_US, num_rounds, 1);
+    match pair {
         None => {
             info!("{url} appears to have a frozen clock");
-            Ok(None)
+            Ok(MeasurementResult { offset: None, rounds })
         }
-        Some(pair) => Ok(Some(clock_diff_for_pair(&pair))),
+        Some(pair) => Ok(MeasurementResult {
+            offset: Some(clock_diff_for_pair(&pair)),
+            rounds,
+        }),
     }
 }

@@ -57,7 +57,6 @@
 
 We investigate a variety of techniques to try to determine, in general, how in sync the internet's clocks are. To do this, we take advantage
 
-
 #lorem(120)
 
 = Background & Related Work

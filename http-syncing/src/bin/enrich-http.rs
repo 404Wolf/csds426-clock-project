@@ -98,14 +98,18 @@ fn main() {
         .flexible(true)
         .from_reader(std::io::BufReader::new(in_file));
 
-    let candidates = rdr
+    let all_candidates: Vec<InputRecord> = rdr
         .deserialize::<InputRecord>()
         .filter_map(|r| match r {
             Ok(rec) => Some(rec),
             Err(e) => { warn!("skipping malformed row: {e}"); None }
         })
         .filter(|r| r.had_date && r.clock_offset_ms.is_some())
-        .skip(skip_rows);
+        .collect();
+
+    info!("{} candidates with had_date=true and icmp clock offset", all_candidates.len());
+
+    let candidates = all_candidates.into_iter().skip(skip_rows);
 
     let append = resume_after.is_some();
     let out_file = if append {

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use itertools::Itertools;
+use log::{info, warn};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +16,9 @@ struct Args {
     input: PathBuf,
     /// Output comparison CSV
     output: PathBuf,
+    /// HTTP method to use for probing (e.g. HEAD, GET)
+    #[arg(long, default_value = "HEAD")]
+    method: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -44,7 +48,6 @@ struct OutputRecord {
     hostname: String,
     icmp_rtt_ms: f64,
     icmp_clock_offset_ms: i64,
-    http_rtt_us: u64,
     http_clock_offset_ms: i64,
     country: String,
     city: String,
@@ -58,6 +61,9 @@ struct BatchOnly {
 }
 
 fn get_latest_batch(path: &PathBuf) -> Option<u64> {
+    if !path.is_file() {
+        return None;
+    }
     let file = File::open(path).ok()?;
     let mut rdr = csv::ReaderBuilder::new()
         .flexible(true)
@@ -70,8 +76,10 @@ fn get_latest_batch(path: &PathBuf) -> Option<u64> {
 }
 
 fn main() {
+    env_logger::init();
+
     rayon::ThreadPoolBuilder::new()
-        .num_threads(1000)
+        .num_threads(10)
         .build_global()
         .unwrap();
 
@@ -81,7 +89,7 @@ fn main() {
     let skip_rows = resume_after.map_or(0, |b| (b as usize + 1) * BATCH_SIZE);
 
     if let Some(b) = resume_after {
-        eprintln!("resuming after batch {b}, skipping {skip_rows} rows");
+        info!("resuming after batch {b}, skipping {skip_rows} rows");
     }
 
     let in_file = File::open(&args.input).expect("failed to open input CSV");
@@ -92,7 +100,10 @@ fn main() {
 
     let candidates = rdr
         .deserialize::<InputRecord>()
-        .filter_map(|r| r.ok())
+        .filter_map(|r| match r {
+            Ok(rec) => Some(rec),
+            Err(e) => { warn!("skipping malformed row: {e}"); None }
+        })
         .filter(|r| r.had_date && r.clock_offset_ms.is_some())
         .skip(skip_rows);
 
@@ -115,17 +126,17 @@ fn main() {
         let batch_num = start_batch + i as u64;
         let batch: Vec<InputRecord> = chunk.collect();
 
-        eprintln!("batch {batch_num} ({} hosts)", batch.len());
+        info!("batch {batch_num} ({} hosts)", batch.len());
 
         let results: Vec<Option<OutputRecord>> = batch
             .par_iter()
             .map(|rec| {
                 let url = format!("http://{}", rec.ip);
-                eprintln!("  measuring {}", rec.ip);
-                match clocks::measure_host(&url) {
-                    Ok((http_rtt_us, http_clock_offset)) => {
-                        eprintln!(
-                            "  {} icmp_offset={}ms http_offset={}ms",
+                info!("measuring {}", rec.ip);
+                match clocks::measure_host_with_method(&url, &args.method) {
+                    Ok(http_clock_offset) => {
+                        info!(
+                            "{} icmp_offset={}ms http_offset={}ms",
                             rec.ip,
                             rec.clock_offset_ms.unwrap(),
                             http_clock_offset.num_milliseconds()
@@ -136,7 +147,6 @@ fn main() {
                             hostname: rec.hostname.clone(),
                             icmp_rtt_ms: rec.rtt_ms,
                             icmp_clock_offset_ms: rec.clock_offset_ms.unwrap(),
-                            http_rtt_us: http_rtt_us as u64,
                             http_clock_offset_ms: http_clock_offset.num_milliseconds(),
                             country: rec.country.clone(),
                             city: rec.city.clone(),
@@ -145,7 +155,7 @@ fn main() {
                         })
                     }
                     Err(e) => {
-                        eprintln!("  {} failed, skipping: {e}", rec.ip);
+                        warn!("{} failed, skipping: {e}", rec.ip);
                         None
                     }
                 }
@@ -157,6 +167,6 @@ fn main() {
             wtr.serialize(&out).expect("failed to write row");
         }
         wtr.flush().expect("failed to flush");
-        eprintln!("batch {batch_num} done ({succeeded}/{} succeeded)", batch.len());
+        info!("batch {batch_num} done ({succeeded}/{} succeeded)", batch.len());
     }
 }

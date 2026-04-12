@@ -84,3 +84,5 @@ Cargo.lock
 /output.csv
 /slides/data-report_files/libs
 /slides
+/report.pdf
+/analysis/clock_sync_map.svg

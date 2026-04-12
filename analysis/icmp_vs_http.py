@@ -13,6 +13,7 @@ def main() -> None:
     parser.add_argument(
         "-o", "--output", default="icmp_vs_http.html", help="Output file path"
     )
+    parser.add_argument("--svg", action="store_true", help="Also save an SVG")
     args = parser.parse_args()
 
     df = pd.read_csv(args.input)
@@ -30,30 +31,16 @@ def main() -> None:
         df,
         x="icmp_clock_offset_ms",
         y="http_clock_offset_ms",
-        hover_data=["ip", "hostname", "icmp_rtt_ms", "http_rtt_us", "country", "city"],
+        hover_data=["ip", "hostname", "icmp_rtt_ms", "country", "city"],
         labels={
             "icmp_clock_offset_ms": "ICMP Clock Offset (ms)",
             "http_clock_offset_ms": "HTTP Clock Offset (ms)",
             "icmp_rtt_ms": "ICMP RTT (ms)",
-            "http_rtt_us": "HTTP RTT (µs)",
         },
         title="ICMP vs HTTP Clock Offset",
     )
 
-    # y = x reference line
-    all_vals = pd.concat([df["icmp_clock_offset_ms"], df["http_clock_offset_ms"]])
-    lo, hi = all_vals.min(), all_vals.max()
-    pad = (hi - lo) * 0.05 if hi != lo else 1
-    fig.add_shape(
-        type="line",
-        x0=lo - pad,
-        y0=lo - pad,
-        x1=hi + pad,
-        y1=hi + pad,
-        line=dict(color="gray", dash="dash", width=1),
-    )
-
-    fig.update_traces(marker=dict(size=10, line=dict(width=1, color="black")))
+    fig.update_traces(marker=dict(size=4, line=dict(width=1, color="black")))
     fig.update_layout(
         xaxis=dict(scaleanchor="y", scaleratio=1),
         margin=dict(l=60, r=20, t=50, b=60),
@@ -65,6 +52,11 @@ def main() -> None:
     else:
         fig.write_html(str(output))
     print(f"Wrote {output}")
+
+    if args.svg:
+        svg_out = output.with_suffix(".svg")
+        fig.write_image(str(svg_out))
+        print(f"Wrote {svg_out}")
 
 
 if __name__ == "__main__":

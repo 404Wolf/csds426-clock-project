@@ -97,10 +97,15 @@
               inetutils
               uv
               ruff
+              liberation_ttf
+              ungoogled-chromium
             ]);
             shellHook = ''
+              export TYPST_FONT_PATHS="${pkgs.liberation_ttf}/share/fonts"
+              export BROWSER_PATH="${pkgs.ungoogled-chromium}/bin/chromium"
               export CC=${pkgs.gcc}/bin/gcc
               export ZMAP_SRC="${zmap}/src"
+              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib pkgs.libgcc.lib pkgs.zlib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
               export C_INCLUDE_PATH="${zmap}/src:${pkgs.zlib.dev}/include:${pkgs.libpcap}/include:${pkgs.json_c}/include:${pkgs.gmp.dev}/include"
               bear -- make -C ./icmp_clocksync clean && bear -- make -C ./icmp_clocksync
             '';

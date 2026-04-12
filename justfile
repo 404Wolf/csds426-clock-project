@@ -17,7 +17,7 @@ test-http HOST METHOD="HEAD":
     printf "batch_num,ip,hostname,rtt_ms,is_http,had_date,country,city,latitude,longitude,daddr,otime,rtime,ttime,clock_offset_ms\n0,{{HOST}},,10.0,true,true,,,0,0,,,,,0\n" | RUSTFLAGS="-C target-cpu=native" cargo run --release --bin enrich-http -- /dev/stdin /dev/stdout --method {{METHOD}} | awk -F, 'NR==2{print "http_clock_offset_ms=" $6 "ms"}'
 
 enrich-http INPUT OUTPUT *ARGS:
-    cargo run --release --bin enrich-http -- {{INPUT}} {{OUTPUT}} {{ARGS}}
+    RUSTFLAGS="-C target-cpu=native" cargo run --release --bin enrich-http -- {{INPUT}} {{OUTPUT}} {{ARGS}}
 
 analysis-setup:
     cd analysis && uv sync

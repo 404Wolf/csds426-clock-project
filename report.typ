@@ -74,6 +74,7 @@ We investigate a variety of techniques to try to determine, in general, how in s
 + I send an HTTP request and see what their date time is. If it is more than 5 seconds off, I do not run further measurements, and we just assume that their timestamp is not accurate enough that it is not worth it.
 + Then I spam 5 HTTP requests just around the second boundary attempting to capture a second boundary.
 + I send 5 evenly spaced requests around the second boundary. When my time is :50.5, :50.75, :51:00, and :51:25 I send requests. Each of these requests has a time we sent the request at, the time we received a HTTP response at, and the server's time.
++ For each of the requests I sent, the server is going to respond with its time with second floor resolution, and it will (hopefully) be different for one of my requests. #footnote[If the server's time is the same for all 5 requests, that means that their clock is "frozen" since it was the same for over a full second].
 
 #lorem(60)
 

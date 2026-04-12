@@ -48,7 +48,8 @@ struct OutputRecord {
     hostname: String,
     icmp_rtt_ms: f64,
     icmp_clock_offset_ms: i64,
-    http_clock_offset_ms: i64,
+    http_clock_offset_ms: Option<i64>,
+    is_frozen_clock: bool,
     country: String,
     city: String,
     latitude: f64,
@@ -139,19 +140,21 @@ fn main() {
                 info!("measuring {}", rec.ip);
                 match clocks::measure_host_with_method(&url, &args.method) {
                     Ok(http_clock_offset) => {
+                        let frozen = http_clock_offset.is_none();
                         info!(
-                            "{} icmp_offset={}ms http_offset={}ms",
+                            "{} icmp_offset={}ms http_offset={}",
                             rec.ip,
-                            rec.clock_offset_ms.unwrap(),
-                            http_clock_offset.num_milliseconds()
+                            rec.clock_offset_ms.unwrap_or(0),
+                            http_clock_offset.map_or("frozen".to_string(), |d| format!("{}ms", d.num_milliseconds())),
                         );
                         Some(OutputRecord {
                             batch_num,
                             ip: rec.ip.clone(),
                             hostname: rec.hostname.clone(),
                             icmp_rtt_ms: rec.rtt_ms,
-                            icmp_clock_offset_ms: rec.clock_offset_ms.unwrap(),
-                            http_clock_offset_ms: http_clock_offset.num_milliseconds(),
+                            icmp_clock_offset_ms: rec.clock_offset_ms.unwrap_or(0),
+                            http_clock_offset_ms: http_clock_offset.map(|d| d.num_milliseconds()),
+                            is_frozen_clock: frozen,
                             country: rec.country.clone(),
                             city: rec.city.clone(),
                             latitude: rec.latitude,

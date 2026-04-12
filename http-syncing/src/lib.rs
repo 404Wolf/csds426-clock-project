@@ -31,7 +31,7 @@ pub struct BoundaryPair {
 }
 
 const SANITY_CHECK_MAX_OFFSET_SECS: i64 = 5;
-const INITIAL_HALF_SPAN_US: i64 = 1_400_000; // +/-5s covers even badly-synced servers
+const INITIAL_HALF_SPAN_US: i64 = 1_300_000; // +/-5s covers even badly-synced servers
 const PROBES: i64 = 10;
 const NUM_ROUNDS: u32 = 7;
 
@@ -120,7 +120,8 @@ pub fn clock_diff_for_pair(pair: &BoundaryPair) -> TimeDelta {
 }
 
 /// Run one full HTTP clock measurement against a URL using HEAD requests.
-pub fn measure_host(url: &str) -> Result<TimeDelta> {
+/// Returns `Ok(None)` if the server appears to have a frozen clock (no second boundary found).
+pub fn measure_host(url: &str) -> Result<Option<TimeDelta>> {
     measure_host_with_method(url, "HEAD")
 }
 
@@ -190,6 +191,9 @@ fn search(
         )
     } else {
         info!("round {}: miss (±{}ms window)", round_num, half_span_us / 1000);
+        if round_num == 1 {
+            return None; // no boundary in widest window — frozen clock
+        }
         search(
             agent,
             url,
@@ -205,17 +209,21 @@ fn search(
 /// Run one full HTTP clock measurement against a URL using the given HTTP method.
 /// Uses recursive binary search to home in on the second boundary, then computes
 /// the clock offset from the tightest boundary pair found.
-pub fn measure_host_with_method(url: &str, method: &str) -> Result<TimeDelta> {
+/// Returns `Ok(None)` if the server appears to have a frozen clock (no second boundary found).
+pub fn measure_host_with_method(url: &str, method: &str) -> Result<Option<TimeDelta>> {
     let agent = make_agent();
 
     let (sanity_date, _) = request_http_date(&agent, url, method)?;
     let now = chrono::Utc::now();
     if (sanity_date - now).num_seconds().abs() > SANITY_CHECK_MAX_OFFSET_SECS {
-        return Ok(sanity_date - now);
+        return Ok(Some(sanity_date - now));
     }
 
-    let pair = search(&agent, url, method, 0, INITIAL_HALF_SPAN_US, NUM_ROUNDS, 1)
-        .ok_or_else(|| anyhow::anyhow!("no second boundary found after {NUM_ROUNDS} rounds"))?;
-
-    Ok(clock_diff_for_pair(&pair))
+    match search(&agent, url, method, 0, INITIAL_HALF_SPAN_US, NUM_ROUNDS, 1) {
+        None => {
+            info!("{url} appears to have a frozen clock");
+            Ok(None)
+        }
+        Some(pair) => Ok(Some(clock_diff_for_pair(&pair))),
+    }
 }

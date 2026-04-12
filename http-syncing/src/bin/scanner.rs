@@ -39,9 +39,12 @@ fn main() {
     for host in &hosts {
         info!("measuring {host}");
         match clocks::measure_host(host) {
-            Ok(offset) => {
+            Ok(Some(offset)) => {
                 info!("{host}: {}ms", offset.num_milliseconds());
                 wtr.write_record([host.as_str(), &offset.num_milliseconds().to_string()]).unwrap();
+            }
+            Ok(None) => {
+                info!("{host}: frozen clock");
             }
             Err(e) => {
                 info!("{host}: failed — {e}");

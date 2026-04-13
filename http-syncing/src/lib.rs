@@ -53,6 +53,10 @@ const SANITY_CHECK_MAX_OFFSET_SECS: i64 = 5;
 const INITIAL_HALF_SPAN_US: i64 = 1_300_000;
 const PROBES: i64 = 10;
 pub const NUM_ROUNDS: u32 = 10;
+/// Stop recursing when the step between probes drops below this threshold.
+/// Below ~1ms the probe spacing is smaller than typical HTTP RTT jitter, so
+/// any "boundary" found is noise rather than a real clock measurement.
+const MIN_STEP_US: i64 = 1_000; // ~1ms; below this, RTT jitter dominates probe spacing
 
 pub fn make_agent() -> Agent {
     Agent::new_with_config(
@@ -155,11 +159,11 @@ fn search(
     rounds_left: u32,
     round_num: u32,
 ) -> (Option<BoundaryPair>, Vec<RoundResult>) {
-    if rounds_left == 0 {
+    let step = (2 * half_span_us) / (PROBES - 1);
+
+    if rounds_left == 0 || step < MIN_STEP_US {
         return (None, vec![]);
     }
-
-    let step = (2 * half_span_us) / (PROBES - 1);
 
     let mut rows: Vec<Record> = (0..PROBES)
         .into_par_iter()

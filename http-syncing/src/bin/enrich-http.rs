@@ -7,7 +7,7 @@ use log::{info, warn};
 use rayon::prelude::*;
 use serde::Deserialize;
 
-const BATCH_SIZE: usize = 2;
+const BATCH_SIZE: usize = 4;
 
 #[derive(Parser)]
 #[command(about = "Measure HTTP clock offset for hosts with ICMP timestamp data")]

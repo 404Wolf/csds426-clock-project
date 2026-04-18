@@ -78,9 +78,8 @@
   + Then I
 
   #figure(
-  place(
-    top + center,
-    float: true,
+    placement: top,
+    scope: "parent",
     table(
       columns: 4,
       align: (left, right, right, right),
@@ -91,14 +90,16 @@
       table.header([*Scan*], [*Hosts*], [*>5s off*], [*%*]),
       table.hline(),
 
-      [ICMP (icmp_timestamp.csv)], [157,929,504], [58,223,197], [36.87%],
+      [ICMP (via ICMP)],          [157,929,504], [58,223,197], [36.87%],
       table.hline(),
-      [HTTP (icmp_with_http.csv)], [7,860], [1,236], [15.73%],
+      [HTTP + ICMP (via ICMP)],   [7,882],       [1,894],      [24.03%],
       table.hline(),
-      [HTTP Tranco (tranco_http.csv)], [14,938], [427], [2.86%],
+      [HTTP + ICMP (via HTTP)],   [7,860],       [1,236],      [15.73%],
+      table.hline(),
+      [Tranco (via HTTP)],        [14,938],      [427],        [2.86%],
       table.hline(),
     ),
-  ), caption: [Many clocks on the internet are very off, to a degree where attempting to get a milisecond precision estimate is not worth collecting. I observed that, in general, ICMP hosts are more likely to be very off than HTTP hosts, and that the top Tranco sites are much more likely to be accurate than the general population of HTTP hosts. This makes sense -- I would expect that Tranco hosts are more modern, frequently used, and more important-to-have-correct dates, likely in large part due to the requirement of TLS for HTTPS that you have an accurate clock. Additionally, ICMP servers are likely older and less maintained, and may have not been properly configured to sync their time to begin with.]
+    caption: [Fraction of hosts with clocks more than 5 seconds off, broken down by scan dataset and measurement method. HTTP + ICMP is the subset of ICMP hosts that also returned an HTTP Date header, measured independently by both methods (7,882 had a valid ICMP offset; 7,860 had a valid HTTP offset — 22 hosts returned no HTTP response). Among the overlapping hosts, HTTP clocks are better maintained than ICMP clocks, and Tranco sites are far more accurate than the general HTTP population.],
   )
 
   === Caching

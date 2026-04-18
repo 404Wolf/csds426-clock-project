@@ -192,23 +192,36 @@ static void icmp_timestamp_process_packet(const u_char *packet,
   fs_add_uint64(fs, "rtime", rtime);
   fs_add_uint64(fs, "ttime", ttime);
 
-  // Calculate RTT and remote processing time
-  uint64_t local_recv_ms = (ts.tv_sec % 86400) * 1000 + (ts.tv_nsec / 1000000);
-  uint64_t rtt_ms = 0;
-  uint64_t remote_proc_ms = 0;
-
-  if (rtime > 0 && ttime > 0) {
-    // RTT = (local_recv_time - originate_time) - (transmit_time - receive_time)
-    uint64_t total_time = (local_recv_ms >= otime)
-                              ? (local_recv_ms - otime)
-                              : (86400000 - otime + local_recv_ms);
-    remote_proc_ms =
-        (ttime >= rtime) ? (ttime - rtime) : (86400000 - rtime + ttime);
-    rtt_ms = (total_time >= remote_proc_ms) ? (total_time - remote_proc_ms) : 0;
+  if (icmp->icmp_type == ICMP_TIMESTAMPREPLY) {
+    // RFC 792: bit 31 set means non-standard format, not ms-since-midnight-UTC
+    if ((rtime & 0x80000000UL) || (ttime & 0x80000000UL)) {
+      fs_add_uint64(fs, "ts_nonstandard", 1);
+      fs_add_uint64(fs, "rtt_ms", 0);
+      fs_add_uint64(fs, "remote_processing_ms", 0);
+    } else {
+      fs_add_uint64(fs, "ts_nonstandard", 0);
+      uint64_t local_recv_ms = (ts.tv_sec % 86400) * 1000 + (ts.tv_nsec / 1000000);
+      uint64_t rtt_ms = 0;
+      uint64_t remote_proc_ms = 0;
+      if (rtime > 0 && ttime > 0) {
+        // RTT = (local_recv_time - originate_time) - (transmit_time - receive_time)
+        uint64_t total_time = (local_recv_ms >= otime)
+                                  ? (local_recv_ms - otime)
+                                  : (86400000 - otime + local_recv_ms);
+        remote_proc_ms =
+            (ttime >= rtime) ? (ttime - rtime) : (86400000 - rtime + ttime);
+        rtt_ms = (total_time >= remote_proc_ms) ? (total_time - remote_proc_ms) : 0;
+      }
+      fs_add_uint64(fs, "rtt_ms", rtt_ms);
+      fs_add_uint64(fs, "remote_processing_ms", remote_proc_ms);
+    }
+  } else {
+    fs_add_uint64(fs, "ts_nonstandard", 0);
+    fs_add_uint64(fs, "rtt_ms", 0);
+    fs_add_uint64(fs, "remote_processing_ms", 0);
   }
 
-  fs_add_uint64(fs, "rtt_ms", rtt_ms);
-  fs_add_uint64(fs, "remote_processing_ms", remote_proc_ms);
+classify:
 
   switch (icmp->icmp_type) {
   case ICMP_ECHOREPLY:
@@ -260,6 +273,9 @@ static fielddef_t fields[] = {
     {.name = "ttime",
      .type = "int",
      .desc = "transmit timestamp from responder (ms since midnight UTC)"},
+    {.name = "ts_nonstandard",
+     .type = "int",
+     .desc = "1 if rtime/ttime have bit 31 set (RFC 792 non-standard format)"},
     {.name = "rtt_ms",
      .type = "int",
      .desc = "round-trip time in milliseconds"},
@@ -287,4 +303,4 @@ probe_module_t module_icmp_timestamp = {
     .close = NULL,
     .output_type = OUTPUT_TYPE_STATIC,
     .fields = fields,
-    .numfields = 11};
+    .numfields = 12};

@@ -13,6 +13,8 @@ pub struct Record {
     pub host: String,
     /// Which search round this probe belongs to.
     pub run_num: u32,
+    /// 1-indexed position within the round (sorted by offset_micros).
+    pub request_num: u32,
     /// Scheduled send offset from the local second boundary, in microseconds.
     pub offset_micros: i64,
     /// Server-reported time from the HTTP Date header (second resolution).
@@ -47,16 +49,38 @@ pub struct MeasurementResult {
     pub offset: Option<TimeDelta>,
     /// Per-round details, in round order.
     pub rounds: Vec<RoundResult>,
+    /// Every individual probe fired during the measurement, in round then request order.
+    pub probes: Vec<Record>,
 }
 
-const SANITY_CHECK_MAX_OFFSET_SECS: i64 = 5;
-const INITIAL_HALF_SPAN_US: i64 = 1_300_000;
-const PROBES: i64 = 10;
-pub const NUM_ROUNDS: u32 = 10;
-/// Stop recursing when the step between probes drops below this threshold.
-/// Below ~1ms the probe spacing is smaller than typical HTTP RTT jitter, so
-/// any "boundary" found is noise rather than a real clock measurement.
-const MIN_STEP_US: i64 = 1_000; // ~1ms; below this, RTT jitter dominates probe spacing
+/// Tuning parameters for the binary-search clock measurement.
+#[derive(Clone, Debug)]
+pub struct SearchConfig {
+    /// Number of binary-search rounds to run.
+    pub num_rounds: u32,
+    /// Number of probes fired per round, spread uniformly across the window.
+    pub probes: i64,
+    /// Initial half-span of the search window in microseconds.
+    pub initial_half_span_us: i64,
+    /// Stop recursing when the step between probes drops below this (µs).
+    /// Below ~1ms the spacing is smaller than typical HTTP RTT jitter.
+    pub min_step_us: i64,
+    /// If the server's clock differs from local by more than this many seconds
+    /// on the first request, skip binary search and report the raw offset.
+    pub sanity_max_offset_secs: i64,
+}
+
+impl Default for SearchConfig {
+    fn default() -> Self {
+        Self {
+            num_rounds: 10,
+            probes: 10,
+            initial_half_span_us: 1_300_000,
+            min_step_us: 1_000,
+            sanity_max_offset_secs: 5,
+        }
+    }
+}
 
 pub fn make_agent() -> Agent {
     Agent::new_with_config(
@@ -140,16 +164,16 @@ pub fn clock_diff_for_pair(pair: &BoundaryPair) -> TimeDelta {
     pair.after.server - (pair.after.send_at + rtt / 2)
 }
 
-/// Run one full HTTP clock measurement against a URL using HEAD requests.
+/// Run one full HTTP clock measurement against a URL using HEAD requests and default config.
 /// Returns a `MeasurementResult` with per-round details.
 /// `offset` is None if the server appears to have a frozen clock.
 pub fn measure_host(url: &str) -> Result<MeasurementResult> {
-    measure_host_with_method(url, "HEAD", NUM_ROUNDS)
+    measure_host_with_config(url, "HEAD", &SearchConfig::default())
 }
 
-/// Probe `PROBES` offsets uniformly across [center ± half_span],
+/// Probe `cfg.probes` offsets uniformly across [center ± half_span],
 /// then recurse with the span halved and the center narrowed to the boundary found.
-/// Returns `(final_pair, per_round_results)` in round order.
+/// Returns `(final_pair, per_round_results, all_probes)` in round order.
 fn search(
     agent: &Agent,
     url: &str,
@@ -158,14 +182,15 @@ fn search(
     half_span_us: i64,
     rounds_left: u32,
     round_num: u32,
-) -> (Option<BoundaryPair>, Vec<RoundResult>) {
-    let step = (2 * half_span_us) / (PROBES - 1);
+    cfg: &SearchConfig,
+) -> (Option<BoundaryPair>, Vec<RoundResult>, Vec<Record>) {
+    let step = (2 * half_span_us) / (cfg.probes - 1);
 
-    if rounds_left == 0 || step < MIN_STEP_US {
-        return (None, vec![]);
+    if rounds_left == 0 || step < cfg.min_step_us {
+        return (None, vec![], vec![]);
     }
 
-    let mut rows: Vec<Record> = (0..PROBES)
+    let mut rows: Vec<Record> = (0..cfg.probes)
         .into_par_iter()
         .filter_map(|n| {
             let offset = center_us - half_span_us + n * step;
@@ -176,6 +201,7 @@ fn search(
             Some(Record {
                 host: url.to_string(),
                 run_num: round_num,
+                request_num: 0, // assigned after sort below
                 offset_micros: offset,
                 server,
                 send_at,
@@ -185,6 +211,9 @@ fn search(
         .collect();
 
     rows.sort_by_key(|r| (r.offset_micros, r.server));
+    for (i, row) in rows.iter_mut().enumerate() {
+        row.request_num = (i + 1) as u32;
+    }
 
     if let Some(pair) = rows.windows(2).find_map(|w| {
         (w[0].server.second() != w[1].server.second()).then_some(BoundaryPair {
@@ -204,11 +233,13 @@ fn search(
             window_half_ms: half_span_us / 1000,
             center_us: new_center,
         };
-        let (final_pair, mut rest) = search(
-            agent, url, method, new_center, half_span_us / 2, rounds_left - 1, round_num + 1,
+        let (final_pair, mut rest, mut sub_probes) = search(
+            agent, url, method, new_center, half_span_us / 2, rounds_left - 1, round_num + 1, cfg,
         );
         rest.insert(0, round_result);
-        (Some(final_pair.unwrap_or(pair)), rest)
+        let mut all_probes = rows;
+        all_probes.append(&mut sub_probes);
+        (Some(final_pair.unwrap_or(pair)), rest, all_probes)
     } else {
         info!("round {}: miss (±{}ms window)", round_num, half_span_us / 1000);
         let round_result = RoundResult {
@@ -218,40 +249,44 @@ fn search(
             center_us,
         };
         if round_num == 1 {
-            return (None, vec![round_result]); // frozen clock — bail immediately
+            return (None, vec![round_result], rows); // frozen clock — bail immediately
         }
-        let (final_pair, mut rest) = search(
-            agent, url, method, center_us, half_span_us / 2, rounds_left - 1, round_num + 1,
+        let (final_pair, mut rest, mut sub_probes) = search(
+            agent, url, method, center_us, half_span_us / 2, rounds_left - 1, round_num + 1, cfg,
         );
         rest.insert(0, round_result);
-        (final_pair, rest)
+        let mut all_probes = rows;
+        all_probes.append(&mut sub_probes);
+        (final_pair, rest, all_probes)
     }
 }
 
-/// Run one full HTTP clock measurement against a URL using the given HTTP method.
+/// Run one full HTTP clock measurement against a URL using the given method and config.
 /// Uses recursive binary search to home in on the second boundary, then computes
 /// the clock offset from the tightest boundary pair found.
-pub fn measure_host_with_method(url: &str, method: &str, num_rounds: u32) -> Result<MeasurementResult> {
+pub fn measure_host_with_config(url: &str, method: &str, cfg: &SearchConfig) -> Result<MeasurementResult> {
     let agent = make_agent();
 
     let (sanity_date, _) = request_http_date(&agent, url, method)?;
     let now = chrono::Utc::now();
-    if (sanity_date - now).num_seconds().abs() > SANITY_CHECK_MAX_OFFSET_SECS {
+    if (sanity_date - now).num_seconds().abs() > cfg.sanity_max_offset_secs {
         return Ok(MeasurementResult {
             offset: Some(sanity_date - now),
             rounds: vec![],
+            probes: vec![],
         });
     }
 
-    let (pair, rounds) = search(&agent, url, method, 0, INITIAL_HALF_SPAN_US, num_rounds, 1);
+    let (pair, rounds, probes) = search(&agent, url, method, 0, cfg.initial_half_span_us, cfg.num_rounds, 1, cfg);
     match pair {
         None => {
             info!("{url} appears to have a frozen clock");
-            Ok(MeasurementResult { offset: None, rounds })
+            Ok(MeasurementResult { offset: None, rounds, probes })
         }
         Some(pair) => Ok(MeasurementResult {
             offset: Some(clock_diff_for_pair(&pair)),
             rounds,
+            probes,
         }),
     }
 }

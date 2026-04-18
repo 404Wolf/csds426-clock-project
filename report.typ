@@ -9,7 +9,7 @@
         #counter(page).display()
       ]
     ]
-  }
+  },
 )
 #set text(font: "Liberation Serif", size: 12pt)
 #set par(justify: true, leading: 1.5em)
@@ -53,125 +53,210 @@
 
 #columns(2, gutter: 0.25in)[
 
-= Introduction
+  = Introduction
 
-We investigate a variety of techniques to try to determine, in general, how in sync the internet's clocks are. To do this, we take advantage
+  We investigate a variety of techniques to try to determine, in general, how in sync the internet's clocks are. To do this, we take advantage
 
-#lorem(120)
+  #lorem(120)
 
-= Background & Related Work
+  = Background & Related Work
 
-== Network Time Protocol and Clock Synchronization
+  == Network Time Protocol and Clock Synchronization
 
-#lorem(80)
+  #lorem(80)
 
-== ICMP Timestamp
+  == ICMP Timestamp
 
-#lorem(70)
+  #lorem(70)
 
-== HTTP Date Header
+  == HTTP Date Header
 
-+ I send an HTTP request and see what their date time is. If it is more than 5 seconds off, I do not run further measurements, and we just assume that their timestamp is not accurate enough that it is not worth it.
-+ Then I spam 5 HTTP requests just around the second boundary attempting to capture a second boundary.
-+ I send 5 evenly spaced requests around the second boundary. When my time is :50.5, :50.75, :51:00, and :51:25 I send requests. Each of these requests has a time we sent the request at, the time we received a HTTP response at, and the server's time.
-+ For each of the requests I sent, the server is going to respond with its time with second floor resolution, and it will (hopefully) be different for one of my requests. #footnote[If the server's time is the same for all 5 requests, that means that their clock is "frozen" since it was the same for over a full second].
+  + I send an HTTP request and see what their date time is. If it is more than 5 seconds off, I do not run further measurements, and we just assume that their timestamp is not accurate enough that it is not worth it.
+  + Then I spam 5 HTTP requests just around the second boundary attempting to capture a second boundary.
+  + I send 5 evenly spaced requests around the second boundary. When my time is :50.5, :50.75, :51:00, and :51:25 I send requests. Each of these requests has a time we sent the request at, the time we received a HTTP response at, and the server's time.
+  + For each of the requests I sent, the server is going to respond with its time with second floor resolution, and it will (hopefully) be different for one of my requests. #footnote[If the server's time is the same for all 5 requests, that means that their clock is "frozen" since it was the same for over a full second].
+  + Then I
 
-#lorem(60)
+  #figure(
+  place(
+    top + center,
+    float: true,
+    table(
+      columns: 4,
+      align: (left, right, right, right),
+      inset: 4pt,
+      stroke: (x: 0.5pt, y: none),
 
-== Related Measurement Work
+      table.hline(),
+      table.header([*Scan*], [*Hosts*], [*>5s off*], [*%*]),
+      table.hline(),
 
-#lorem(70)
+      [ICMP (icmp_timestamp.csv)], [157,929,504], [58,223,197], [36.87%],
+      table.hline(),
+      [HTTP (icmp_with_http.csv)], [7,860], [1,236], [15.73%],
+      table.hline(),
+      [HTTP Tranco (tranco_http.csv)], [14,938], [427], [2.86%],
+      table.hline(),
+    ),
+  ), caption: [Many clocks on the internet are very off, to a degree where attempting to get a milisecond precision estimate is not worth collecting. I observed that, in general, ICMP hosts are more likely to be very off than HTTP hosts, and that the top Tranco sites are much more likely to be accurate than the general population of HTTP hosts. This makes sense -- I would expect that Tranco hosts are more modern, frequently used, and more important-to-have-correct dates, likely in large part due to the requirement of TLS for HTTPS that you have an accurate clock. Additionally, ICMP servers are likely older and less maintained, and may have not been properly configured to sync their time to begin with.]
+  )
 
-= Methodology
+  === Caching
 
-== ICMP Timestamp Measurement
+  One trait of some HTTP servers is that they will aggressively cache requests, including the date header. This was the case for Vanderbilt's server, where we can clearly see that, if you hit the same cloudfront domain many times
 
-#lorem(90)
+  #lorem(60)
 
-== HTTP Date Header Measurement
+  == Related Measurement Work
 
-#lorem(90)
+  #lorem(70)
 
-== Enrichment Pipeline
+  = Methodology
 
-#lorem(80)
+  == ICMP Timestamp Measurement
 
-== Ethical Considerations
+  #lorem(90)
 
-#lorem(70)
+  == HTTP Date Header Measurement
 
-= Results & Analysis
+  #lorem(90)
 
-== Protocol Support
+  == Enrichment Pipeline
 
-#lorem(80)
+  #lorem(80)
 
-== Clock Offset Distributions
+  == Ethical Considerations
 
-#lorem(90)
+  #lorem(70)
 
-== ICMP vs. HTTP Comparison
+  = Results & Analysis
 
-#lorem(80)
+  == Protocol Support
 
-== Geographic Analysis
+  #lorem(80)
 
-#lorem(80)
+  == Clock Offset Distributions
 
-= Discussion
+  #lorem(90)
 
-#lorem(130)
+  == ICMP vs. HTTP Comparison
 
-= Conclusion
+  #lorem(80)
 
-#lorem(100)
+  == Geographic Analysis
 
-= References
+  #lorem(80)
 
-#set par(hanging-indent: 0.5in, first-line-indent: 0em)
+  = Discussion
 
-Cooper, D., Santesson, S., Farrell, S., Boeyen, S., Housley, R., & Polk, W.
-(2008). _Internet X.509 public key infrastructure certificate and certificate
-revocation list (CRL) profile_ (RFC 5280). Internet Engineering Task Force.
-#link("https://www.rfc-editor.org/rfc/rfc5280")
+  #lorem(130)
 
-Durumeric, Z., Wustrow, E., & Halderman, J. A. (2013). ZMap: Fast internet-wide
-scanning and its security implications. In _Proceedings of the 22nd USENIX
-Security Symposium_ (pp. 605–620). USENIX Association.
+  = Conclusion
 
-Fielding, R., & Reschke, J. (2014). _Hypertext transfer protocol (HTTP/1.1):
-Semantics and content_ (RFC 7231). Internet Engineering Task Force.
-#link("https://www.rfc-editor.org/rfc/rfc7231")
+  #lorem(100)
 
-MaxMind. (2024). _GeoLite2 databases_. MaxMind, Inc.
-#link("https://www.maxmind.com/en/geoip-databases")
+  = References
 
-Mills, D. L. (1991). Internet time synchronization: The network time protocol.
-_IEEE Transactions on Communications_, _39_(10), 1482–1493.
-#link("https://doi.org/10.1109/26.103043")
+  #set par(hanging-indent: 0.5in, first-line-indent: 0em)
 
-Pochat, V. L., Van Goethem, T., Tajalizadehkhoob, S., Korczynski, M., & Joosen,
-W. (2019). Tranco: A research-oriented top sites ranking hardened against
-manipulation. In _Proceedings of the Network and Distributed System Security
-Symposium (NDSS)_.
-#link("https://doi.org/10.14722/ndss.2019.23386")
+  Cooper, D., Santesson, S., Farrell, S., Boeyen, S., Housley, R., & Polk, W.
+  (2008). _Internet X.509 public key infrastructure certificate and certificate
+  revocation list (CRL) profile_ (RFC 5280). Internet Engineering Task Force.
+  #link("https://www.rfc-editor.org/rfc/rfc5280")
 
-Postel, J. (1981). _Internet control message protocol_ (RFC 792). Internet
-Engineering Task Force.
-#link("https://www.rfc-editor.org/rfc/rfc792")
+  Durumeric, Z., Wustrow, E., & Halderman, J. A. (2013). ZMap: Fast internet-wide
+  scanning and its security implications. In _Proceedings of the 22nd USENIX
+  Security Symposium_ (pp. 605–620). USENIX Association.
 
-Schulman, A., & Spring, N. (2011). Pingin' in the rain. In _Proceedings of the
-2011 ACM SIGCOMM Internet Measurement Conference_ (pp. 19–28). ACM.
-#link("https://doi.org/10.1145/2068816.2068819")
+  Fielding, R., & Reschke, J. (2014). _Hypertext transfer protocol (HTTP/1.1):
+  Semantics and content_ (RFC 7231). Internet Engineering Task Force.
+  #link("https://www.rfc-editor.org/rfc/rfc7231")
 
-Shulman, H., & Waidner, M. (2016). One key to sign them all considered
-vulnerable: Evaluation of DNSSEC in the internet. In _Proceedings of the 13th
-USENIX Symposium on Networked Systems Design and Implementation_ (pp. 131–144).
-USENIX Association.
+  MaxMind. (2024). _GeoLite2 databases_. MaxMind, Inc.
+  #link("https://www.maxmind.com/en/geoip-databases")
 
-Veitch, D., Barreto, S., & Ridoux, J. (2009). A foundation for the accurate
-measurement of infrastructure metrics. _IEEE/ACM Transactions on Networking_,
-_17_(5), 1368–1381.
-#link("https://doi.org/10.1109/TNET.2008.2007945")
+  Mills, D. L. (1991). Internet time synchronization: The network time protocol.
+  _IEEE Transactions on Communications_, _39_(10), 1482–1493.
+  #link("https://doi.org/10.1109/26.103043")
+
+  Pochat, V. L., Van Goethem, T., Tajalizadehkhoob, S., Korczynski, M., & Joosen,
+  W. (2019). Tranco: A research-oriented top sites ranking hardened against
+  manipulation. In _Proceedings of the Network and Distributed System Security
+  Symposium (NDSS)_.
+  #link("https://doi.org/10.14722/ndss.2019.23386")
+
+  Postel, J. (1981). _Internet control message protocol_ (RFC 792). Internet
+  Engineering Task Force.
+  #link("https://www.rfc-editor.org/rfc/rfc792")
+
+  Schulman, A., & Spring, N. (2011). Pingin' in the rain. In _Proceedings of the
+  2011 ACM SIGCOMM Internet Measurement Conference_ (pp. 19–28). ACM.
+  #link("https://doi.org/10.1145/2068816.2068819")
+
+  Shulman, H., & Waidner, M. (2016). One key to sign them all considered
+  vulnerable: Evaluation of DNSSEC in the internet. In _Proceedings of the 13th
+  USENIX Symposium on Networked Systems Design and Implementation_ (pp. 131–144).
+  USENIX Association.
+
+  Veitch, D., Barreto, S., & Ridoux, J. (2009). A foundation for the accurate
+  measurement of infrastructure metrics. _IEEE/ACM Transactions on Networking_,
+  _17_(5), 1368–1381.
+  #link("https://doi.org/10.1109/TNET.2008.2007945")
 
 ]
+
+= Appendix
+
+#figure(
+  table(
+    columns: 9,
+    align: (right, right, right, left, left, right, right, right, left),
+    inset: 4pt,
+    stroke: (x: 0.5pt, y: none),
+
+    table.hline(),
+    table.header([*round*], [*req*], [*offset (µs)*], [*send (:ss.µs)*], [*recv (:ss.µs)*], [*Δsend (µs)*], [*Δrecv (µs)*], [*rtt (µs)*], [*server (:ss)*]),
+    table.hline(),
+
+    [1], [1], [-1300000], [:43.843904], [:44.007666], [],        [],        [163762], text(fill: gray)[:44],
+    [1], [2], [-780000],  [:43.843910], [:44.048999], [6],       [41333],   [205089], text(fill: gray)[:44],
+    [1], [3], [-260000],  [:43.843920], [:44.050189], [10],      [1190],    [206269], text(fill: gray)[:44],
+    [1], [4], [260000],   [:44.260000], [:44.401762], [416080],  [351573],  [141762], text(fill: gray)[:44],
+    [1], [5], [780000],   [:44.780001], [:44.941582], [520001],  [539820],  [161581], text(fill: black)[:44],
+    [1], [6], [1300000],  [:45.300001], [:45.466201], [520000],  [524619],  [166200], text(fill: black)[:45],
+    table.hline(),
+
+    [2], [1], [390000],   [:46.390001], [:46.538538], [],        [],        [148537], text(fill: gray)[:46],
+    [2], [2], [650000],   [:46.650000], [:46.812593], [259999],  [274055],  [162593], text(fill: black)[:46],
+    [2], [3], [910000],   [:46.910001], [:47.050561], [260001],  [237968],  [140560], text(fill: black)[:47],
+    [2], [4], [1170000],  [:47.170000], [:47.334228], [259999],  [283667],  [164228], text(fill: gray)[:47],
+    [2], [5], [1430000],  [:47.430000], [:47.568042], [260000],  [233814],  [138042], text(fill: gray)[:47],
+    [2], [6], [1690000],  [:47.690000], [:47.833351], [260000],  [265309],  [143351], text(fill: gray)[:47],
+    table.hline(),
+
+    [3], [1], [455000],   [:48.455001], [:48.596396], [],        [],        [141395], text(fill: gray)[:48],
+    [3], [2], [585000],   [:48.585000], [:48.752314], [129999],  [155918],  [167314], text(fill: gray)[:48],
+    [3], [3], [715000],   [:48.715000], [:48.854435], [130000],  [102121],  [139435], text(fill: gray)[:48],
+    [3], [4], [845000],   [:48.845000], [:48.986004], [130000],  [131569],  [141004], text(fill: black)[:48],
+    [3], [5], [975000],   [:48.975000], [:49.114429], [130000],  [128425],  [139429], text(fill: black)[:49],
+    [3], [6], [1105000],  [:49.105000], [:49.242758], [130000],  [128329],  [137758], text(fill: gray)[:49],
+    table.hline(),
+
+    [4], [1], [747500],   [:50.747500], [:50.890591], [],        [],        [143091], text(fill: gray)[:50],
+    [4], [2], [812500],   [:50.812500], [:50.958616], [65000],   [68025],   [146116], text(fill: black)[:50],
+    [4], [3], [877500],   [:50.877500], [:51.052624], [65000],   [94008],   [175124], text(fill: black)[:51],
+    [4], [4], [942500],   [:50.942500], [:51.108654], [65000],   [56030],   [166154], text(fill: gray)[:51],
+    [4], [5], [1007500],  [:51.007500], [:51.144334], [65000],   [35680],   [136834], text(fill: gray)[:51],
+    [4], [6], [1072500],  [:51.072501], [:51.210660], [65001],   [66326],   [138159], text(fill: gray)[:51],
+    table.hline(),
+
+    [5], [1], [763750],   [:52.763750], [:52.906060], [],        [],        [142310], text(fill: gray)[:52],
+    [5], [2], [796250],   [:52.796250], [:52.944026], [32500],   [37966],   [147776], text(fill: gray)[:52],
+    [5], [3], [828750],   [:52.828751], [:52.971577], [32501],   [27551],   [142826], text(fill: black)[:52],
+    [5], [4], [861250],   [:52.861250], [:53.037005], [32499],   [65428],   [175755], text(fill: black)[:53],
+    [5], [5], [893750],   [:52.893750], [:53.034709], [32500],   [-2296],   [140959], text(fill: gray)[:53],
+    [5], [6], [926250],   [:52.926250], [:53.132740], [32500],   [98031],   [206490], text(fill: gray)[:53],
+    table.hline(),
+  ),
+  caption: [Raw probe data from 5 rounds of binary search against case.edu (all times UTC 16:18). Probes within each round are sorted by server-reported second; Δsend and Δrecv are the gap from the previous probe. The boundary pair (black) is where the server second ticks over.],
+)

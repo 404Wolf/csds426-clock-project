@@ -11,21 +11,26 @@ def main() -> None:
     )
     parser.add_argument("input", help="Path to enrich-http output CSV")
     parser.add_argument(
-        "-o", "--output", default="icmp_vs_http.html", help="Output file path"
+        "-o", "--output", default="out/icmp_vs_http.html", help="Output file path"
     )
     parser.add_argument("--svg", action="store_true", help="Also save an SVG")
+    parser.add_argument("--outliers", type=float, metavar="SECONDS",
+                        help="Keep only points with |offset| < SECONDS on both axes (omit for IQR removal)")
     args = parser.parse_args()
 
     df = pd.read_csv(args.input)
-    with pd.option_context("display.max_rows", None, "display.max_columns", None):
-        print(df)
 
-    # IQR-based outlier removal on both offset axes
-    for col in ("icmp_clock_offset_ms", "http_clock_offset_ms"):
-        q1, q3 = df[col].quantile(0.25), df[col].quantile(0.75)
-        iqr = q3 - q1
-        df = df[df[col].between(q1 - 1.5 * iqr, q3 + 1.5 * iqr)]
-    print(f"{len(df)} points after outlier removal")
+    if args.outliers is not None:
+        threshold_ms = args.outliers * 1000
+        for col in ("icmp_clock_offset_ms", "http_clock_offset_ms"):
+            df = df[df[col].abs() < threshold_ms]
+    else:
+        # IQR-based outlier removal on both offset axes
+        for col in ("icmp_clock_offset_ms", "http_clock_offset_ms"):
+            q1, q3 = df[col].quantile(0.25), df[col].quantile(0.75)
+            iqr = q3 - q1
+            df = df[df[col].between(q1 - 1.5 * iqr, q3 + 1.5 * iqr)]
+    print(f"{len(df)} points")
 
     fig = px.scatter(
         df,

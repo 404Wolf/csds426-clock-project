@@ -5,9 +5,22 @@ use std::path::PathBuf;
 use clap::Parser;
 use log::{info, warn};
 use rayon::prelude::*;
-use serde::Deserialize;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 const BATCH_SIZE: usize = 4;
+
+#[derive(Serialize)]
+struct ProbeRow<'a> {
+    host: &'a str,
+    round: u32,
+    request: u32,
+    offset_micros: i64,
+    send_at: DateTime<Utc>,
+    receive_at: DateTime<Utc>,
+    server: DateTime<Utc>,
+    rtt_us: i64,
+}
 
 #[derive(Parser)]
 #[command(about = "Measure HTTP clock offset for hosts with ICMP timestamp data")]
@@ -20,8 +33,23 @@ struct Args {
     #[arg(long, default_value = "HEAD")]
     method: String,
     /// Number of binary-search rounds per host
-    #[arg(long, default_value_t = clocks::NUM_ROUNDS)]
+    #[arg(long, default_value_t = 10)]
     rounds: u32,
+    /// Number of probes fired per round
+    #[arg(long, default_value_t = 10)]
+    probes: i64,
+    /// Initial half-span of the search window in microseconds
+    #[arg(long, default_value_t = 1_300_000)]
+    initial_half_span_us: i64,
+    /// Stop recursing when the probe step drops below this many microseconds
+    #[arg(long, default_value_t = 1_000)]
+    min_step_us: i64,
+    /// Skip binary search and report raw offset if server clock differs by more than this many seconds
+    #[arg(long, default_value_t = 5)]
+    sanity_max_offset_secs: i64,
+    /// If set, write every individual probe to this CSV for debugging
+    #[arg(long)]
+    probe_csv: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -103,6 +131,14 @@ fn main() {
 
     let args = Args::parse();
 
+    let cfg = clocks::SearchConfig {
+        num_rounds: args.rounds,
+        probes: args.probes,
+        initial_half_span_us: args.initial_half_span_us,
+        min_step_us: args.min_step_us,
+        sanity_max_offset_secs: args.sanity_max_offset_secs,
+    };
+
     let resume_after = get_latest_batch(&args.output);
     let skip_rows = resume_after.map_or(0, |b| (b as usize + 1) * BATCH_SIZE);
 
@@ -142,8 +178,12 @@ fn main() {
     let mut wtr = csv::Writer::from_writer(out_file);
 
     if !append {
-        wtr.write_record(&build_header(args.rounds)).expect("failed to write header");
+        wtr.write_record(&build_header(cfg.num_rounds)).expect("failed to write header");
     }
+
+    let mut probe_wtr = args.probe_csv.as_ref().map(|path| {
+        csv::Writer::from_path(path).expect("failed to open probe CSV")
+    });
 
     let start_batch = resume_after.map_or(0, |b| b + 1);
 
@@ -152,12 +192,12 @@ fn main() {
 
         info!("batch {batch_num} ({} hosts)", chunk.len());
 
-        let rows: Vec<Option<Vec<String>>> = chunk
+        let results: Vec<(Option<Vec<String>>, Vec<clocks::Record>)> = chunk
             .par_iter()
             .map(|rec| {
                 let url = format!("http://{}", rec.ip);
                 info!("measuring {}", rec.ip);
-                match clocks::measure_host_with_method(&url, &args.method, args.rounds) {
+                match clocks::measure_host_with_config(&url, &args.method, &cfg) {
                     Ok(result) => {
                         let frozen = result.offset.is_none();
                         info!(
@@ -185,7 +225,7 @@ fn main() {
                             rec.longitude.to_string(),
                         ];
 
-                        for n in 1..=args.rounds {
+                        for n in 1..=cfg.num_rounds {
                             if let Some(r) = round_map.get(&n) {
                                 row.push(r.diff_ms.map_or(String::new(), |d| d.to_string()));
                                 row.push(r.window_half_ms.to_string());
@@ -197,19 +237,36 @@ fn main() {
                             }
                         }
 
-                        Some(row)
+                        (Some(row), result.probes)
                     }
                     Err(e) => {
                         warn!("{} failed, skipping: {e}", rec.ip);
-                        None
+                        (None, vec![])
                     }
                 }
             })
             .collect();
 
-        let succeeded = rows.iter().filter(|r| r.is_some()).count();
-        for row in rows.into_iter().flatten() {
-            wtr.write_record(&row).expect("failed to write row");
+        let succeeded = results.iter().filter(|(r, _)| r.is_some()).count();
+        for (row, probes) in results {
+            if let Some(row) = row {
+                wtr.write_record(&row).expect("failed to write row");
+            }
+            if let Some(ref mut pw) = probe_wtr {
+                for p in &probes {
+                    pw.serialize(ProbeRow {
+                        host: &p.host,
+                        round: p.run_num,
+                        request: p.request_num,
+                        offset_micros: p.offset_micros,
+                        send_at: p.send_at,
+                        receive_at: p.receive_at,
+                        server: p.server,
+                        rtt_us: (p.receive_at - p.send_at).num_microseconds().unwrap_or(0),
+                    }).expect("failed to write probe row");
+                }
+                pw.flush().expect("failed to flush probe CSV");
+            }
         }
         wtr.flush().expect("failed to flush");
         info!("batch {batch_num} done ({succeeded}/{} succeeded)", chunk.len());

@@ -129,7 +129,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Plot ICMP clock sync data on a world map")
     parser.add_argument("input", help="Path to enriched CSV file (new format)")
     parser.add_argument("clockdiff", help="Path to clockdiff CSV (old format); black circles mark is_http rows")
-    parser.add_argument("-o", "--output", default="clock_sync_map")
+    parser.add_argument("-o", "--output", default="out/clock_sync_map")
     parser.add_argument("--svg", action="store_true", help="Also save an SVG")
     args = parser.parse_args()
 

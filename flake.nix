@@ -97,6 +97,10 @@
               inetutils
               uv
               ruff
+              (python3.withPackages (ps: [
+                ps.optuna
+                ps.numpy
+              ]))
               liberation_ttf
               ungoogled-chromium
             ]);

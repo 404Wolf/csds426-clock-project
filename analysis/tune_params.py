@@ -73,31 +73,36 @@ def measure(host: str, params: SearchParams, timeout: int = 60) -> int | None:
         return None
 
 
+def nudge_and_measure(srv: Server, offset_s: float, params: SearchParams) -> tuple[str, float, int | None]:
+    """Set server clock to offset, measure, return (host, offset, result)."""
+    srv.nudge_time(offset_s)
+    result = measure(srv.host, params)
+    return srv.host, offset_s, result
+
+
 def evaluate(servers: list[Server], params: SearchParams, offsets: list[float]) -> float:
-    """Test params across all clock offsets and servers, return average error in microseconds."""
+    """Assign offsets round-robin to servers, run batches in parallel."""
+    # Pair each offset with a server round-robin
+    jobs = [(servers[i % len(servers)], off) for i, off in enumerate(offsets)]
+
     total_err = 0
     count = 0
 
-    for offset_s in offsets:
-        expected_us = int(offset_s * 1_000_000)
-
-        # Nudge all servers to this offset in parallel
-        with ThreadPoolExecutor(max_workers=len(servers)) as pool:
-            list(pool.map(lambda srv: srv.nudge_time(offset_s), servers))
-
-        # Measure all servers in parallel
-        with ThreadPoolExecutor(max_workers=len(servers)) as pool:
-            futures = {pool.submit(measure, srv.host, params): srv for srv in servers}
-            for fut in futures:
-                srv = futures[fut]
-                result_us = fut.result()
+    # Process in batches of len(servers)
+    for batch_start in range(0, len(jobs), len(servers)):
+        batch = jobs[batch_start:batch_start + len(servers)]
+        with ThreadPoolExecutor(max_workers=len(batch)) as pool:
+            futures = [pool.submit(nudge_and_measure, srv, off, params) for srv, off in batch]
+            for f in futures:
+                host, offset_s, result_us = f.result()
+                expected_us = int(offset_s * 1_000_000)
                 if result_us is None:
-                    print(f"    {srv.host} offset={offset_s:+.1f}s -> FAIL")
+                    print(f"    {host} offset={offset_s:+.1f}s -> FAIL")
                     return 10_000_000
                 err = abs(result_us - expected_us)
                 total_err += err
                 count += 1
-                print(f"    {srv.host} offset={offset_s:+.1f}s -> measured={result_us:+d}us expected={expected_us:+d}us err={err}us")
+                print(f"    {host} offset={offset_s:+.1f}s -> measured={result_us:+d}us expected={expected_us:+d}us err={err}us")
 
     avg_err = total_err / count
     print(f"  => avg_err={avg_err:.0f}us")

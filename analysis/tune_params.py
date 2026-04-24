@@ -25,11 +25,16 @@ class Server:
         subprocess.run(["ssh", self.ssh, cmd], capture_output=True, timeout=15)
 
     def nudge_time(self, offset_s: float) -> None:
+        # Stop chrony so it doesn't fight our offset
+        self.ssh_cmd("systemctl stop chrony")
+        # Sync to real time via local clock
+        target = time.time() + offset_s
+        self.ssh_cmd(f"date -s @{target:.3f}")
+
+    def sync_time(self) -> None:
+        """Restore real time via chrony."""
+        self.ssh_cmd("systemctl start chrony")
         self.ssh_cmd("chronyc makestep")
-        time.sleep(0.1)
-        if offset_s != 0:
-            target = time.time() + offset_s
-            self.ssh_cmd(f"date -s @{target:.3f}")
 
 
 @dataclass
@@ -136,7 +141,7 @@ def main():
         print("\nInterrupted, showing results so far...")
 
     for srv in servers:
-        srv.nudge_time(0)
+        srv.sync_time()
 
     print(f"\n{'='*60}")
     if len(study.trials) > 0 and study.best_trial.value is not None:

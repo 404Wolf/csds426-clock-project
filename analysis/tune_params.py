@@ -25,16 +25,16 @@ class Server:
         subprocess.run(["ssh", self.ssh, cmd], capture_output=True, timeout=15)
 
     def nudge_time(self, offset_s: float) -> None:
-        # Stop chrony so it doesn't fight our offset
-        self.ssh_cmd("systemctl stop chrony")
-        # Sync to real time via local clock
-        target = time.time() + offset_s
-        self.ssh_cmd(f"date -s @{target:.3f}")
+        # Stop chrony, sync to real time, then apply offset -- all on the remote
+        self.ssh_cmd(
+            f"systemctl stop chrony && "
+            f"chronyd -q 'server pool.ntp.org iburst' 2>/dev/null; "
+            f"date -s @$(echo \"$(date +%s.%N) + {offset_s}\" | bc)"
+        )
 
     def sync_time(self) -> None:
         """Restore real time via chrony."""
-        self.ssh_cmd("systemctl start chrony")
-        self.ssh_cmd("chronyc makestep")
+        self.ssh_cmd("systemctl start chrony && chronyc makestep")
 
 
 @dataclass

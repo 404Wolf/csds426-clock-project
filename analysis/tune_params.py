@@ -25,9 +25,8 @@ class Server:
         subprocess.run(["ssh", self.ssh, cmd], capture_output=True, timeout=30)
 
     def set_time(self, offset_s: float = 0) -> None:
-        """Set remote clock to local time + offset."""
-        target = time.time() + offset_s
-        self.ssh_cmd(f"date -s @{target:.3f}")
+        """Set remote clock to its own current time + offset."""
+        self.ssh_cmd(f"date -s @$(echo \"$(date +%s.%N) + {offset_s}\" | bc)")
 
 
 @dataclass
@@ -76,7 +75,7 @@ def nudge_and_measure(srv: Server, offset_s: float, params: SearchParams) -> tup
     """Set server clock to offset, measure, restore clock, return (host, offset, result)."""
     srv.set_time(offset_s)
     result = measure(srv.host, params)
-    srv.set_time(0)
+    srv.set_time(-offset_s)
     return srv.host, offset_s, result
 
 
@@ -118,7 +117,7 @@ def evaluate(servers: list[Server], params: SearchParams, offsets: list[float]) 
 def main():
     ap = argparse.ArgumentParser(description="Tune test-http parameters with optuna")
     ap.add_argument("hosts", nargs="+", help="host IPs to test (also used for ssh as root@<ip>)")
-    ap.add_argument("--trials", type=int, default=100, help="Number of trials")
+    ap.add_argument("--trials", type=int, default=2000, help="Number of trials")
     ap.add_argument("--offsets", type=float, nargs="+", default=OFFSETS_S,
                      help="Clock offsets to test (seconds)")
     args = ap.parse_args()

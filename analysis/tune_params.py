@@ -25,10 +25,9 @@ class Server:
         subprocess.run(["ssh", self.ssh, cmd], capture_output=True, timeout=15)
 
     def nudge_time(self, offset_s: float) -> None:
-        # Stop chrony, sync to real time, then apply offset -- all on the remote
+        # Sync clock, stop chrony, apply offset -- all on the remote
+        self.ssh_cmd("chronyc makestep 2>/dev/null; systemctl stop chrony")
         self.ssh_cmd(
-            f"systemctl stop chrony && "
-            f"chronyd -q 'server pool.ntp.org iburst' 2>/dev/null; "
             f"date -s @$(echo \"$(date +%s.%N) + {offset_s}\" | bc)"
         )
 

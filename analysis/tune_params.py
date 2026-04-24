@@ -25,9 +25,8 @@ class Server:
 
     def nudge_time(self, offset_s: float) -> None:
         self.ssh_cmd("chronyc makestep")
-        time.sleep(1)
+        time.sleep(0.1)
         if offset_s != 0:
-            # Use absolute time to avoid compounding
             target = time.time() + offset_s
             self.ssh_cmd(f"date -s @{target:.3f}")
 
@@ -82,9 +81,9 @@ def evaluate(servers: list[Server], params: SearchParams, offsets: list[float]) 
     for offset_s in offsets:
         expected_us = int(offset_s * 1_000_000)
 
-        # Nudge all servers to this offset
-        for srv in servers:
-            srv.nudge_time(offset_s)
+        # Nudge all servers to this offset in parallel
+        with ThreadPoolExecutor(max_workers=len(servers)) as pool:
+            list(pool.map(lambda srv: srv.nudge_time(offset_s), servers))
 
         # Measure all servers in parallel
         with ThreadPoolExecutor(max_workers=len(servers)) as pool:
@@ -119,7 +118,12 @@ def main():
         params = SearchParams.from_trial(trial)
         return evaluate(servers, params, args.offsets)
 
-    study = optuna.create_study(direction="minimize")
+    study = optuna.create_study(
+        direction="minimize",
+        storage="sqlite:///tune_params.db",
+        study_name="http-clock-tuner",
+        load_if_exists=True,
+    )
     try:
         study.optimize(objective, n_trials=args.trials)
     except KeyboardInterrupt:

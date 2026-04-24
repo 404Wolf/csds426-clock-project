@@ -2,6 +2,7 @@
 """Use optuna to find test-http parameters that minimize clock offset error across multiple clock offsets."""
 
 import argparse
+import random
 import re
 import subprocess
 import time
@@ -82,8 +83,8 @@ def nudge_and_measure(srv: Server, offset_s: float, params: SearchParams) -> tup
 
 def evaluate(servers: list[Server], params: SearchParams, offsets: list[float]) -> float:
     """Assign offsets round-robin to servers, run batches in parallel."""
-    # Pair each offset with a server round-robin
-    jobs = [(servers[i % len(servers)], off) for i, off in enumerate(offsets)]
+    # Pair each offset with a random server
+    jobs = [(random.choice(servers), off) for off in offsets]
 
     total_err = 0
     count = 0

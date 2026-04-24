@@ -80,23 +80,30 @@ def measure(host: str, params: SearchParams, timeout: int = 60) -> int | None:
 
 
 def nudge_and_measure(srv: Server, offset_s: float, params: SearchParams) -> tuple[str, float, int | None]:
-    """Set server clock to offset, measure, return (host, offset, result)."""
+    """Set server clock to offset, measure, restore clock, return (host, offset, result)."""
     srv.nudge_time(offset_s)
     result = measure(srv.host, params)
+    srv.sync_time()
     return srv.host, offset_s, result
 
 
 def evaluate(servers: list[Server], params: SearchParams, offsets: list[float]) -> float:
-    """Assign offsets round-robin to servers, run batches in parallel."""
-    # Pair each offset with a random server
-    jobs = [(random.choice(servers), off) for off in offsets]
+    """Assign offsets to servers round-robin (each server gets one offset per batch)."""
+    shuffled_offsets = offsets[:]
+    random.shuffle(shuffled_offsets)
+
+    # Deal offsets to servers like cards -- each server gets sequential offsets
+    batches: list[list[tuple[Server, float]]] = []
+    for i in range(0, len(shuffled_offsets), len(servers)):
+        batch = []
+        for j, off in enumerate(shuffled_offsets[i:i + len(servers)]):
+            batch.append((servers[j], off))
+        batches.append(batch)
 
     total_err = 0
     count = 0
 
-    # Process in batches of len(servers)
-    for batch_start in range(0, len(jobs), len(servers)):
-        batch = jobs[batch_start:batch_start + len(servers)]
+    for batch in batches:
         with ThreadPoolExecutor(max_workers=len(batch)) as pool:
             futures = [pool.submit(nudge_and_measure, srv, off, params) for srv, off in batch]
             for f in futures:

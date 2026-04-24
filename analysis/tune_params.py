@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Use optuna to find test-http parameters that minimize clock offset error across multiple clock offsets."""
+"""Use optuna to find test-http parameters that minimize clock offset error."""
 
 import argparse
 import random
 import re
 import subprocess
-import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
@@ -14,19 +13,6 @@ import optuna
 OFFSET_RE = re.compile(r"http_clock_offset_us=(-?\d+)us")
 
 OFFSETS_S = [-5, -1, -0.5, -0.1, 0.1, 0.5, 1, 5]
-
-
-@dataclass
-class Server:
-    host: str
-    ssh: str  # e.g. "root@1.2.3.4"
-
-    def ssh_cmd(self, cmd: str) -> None:
-        subprocess.run(["ssh", self.ssh, cmd], capture_output=True, timeout=30)
-
-    def set_time(self, offset_s: float = 0) -> None:
-        """Set remote clock to its own current time + offset."""
-        self.ssh_cmd(f"date -s @$(echo \"$(date +%s.%N) + {offset_s}\" | bc)")
 
 
 @dataclass
@@ -60,9 +46,10 @@ class SearchParams:
         ]
 
 
-def measure(host: str, params: SearchParams, timeout: int = 60) -> int | None:
-    """Run test-http and return measured offset in microseconds, or None on failure."""
-    cmd = ["just", "test-http", host, "--"] + params.to_flags()
+def measure(host: str, offset_s: float, params: SearchParams, timeout: int = 60) -> int | None:
+    """Run test-http with offset baked into the URL, return measured offset in microseconds."""
+    url = f"http://{host}/{offset_s}"
+    cmd = ["just", "test-http", url, "--"] + params.to_flags()
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         m = OFFSET_RE.search(r.stdout + r.stderr)
@@ -71,66 +58,45 @@ def measure(host: str, params: SearchParams, timeout: int = 60) -> int | None:
         return None
 
 
-def nudge_and_measure(srv: Server, offset_s: float, params: SearchParams) -> tuple[str, float, int | None]:
-    """Set server clock to offset, measure, restore clock, return (host, offset, result)."""
-    srv.set_time(offset_s)
-    result = measure(srv.host, params)
-    srv.set_time(-offset_s)
-    return srv.host, offset_s, result
+def run_one(host: str, offset_s: float, params: SearchParams) -> tuple[str, float, int | None]:
+    result = measure(host, offset_s, params)
+    return host, offset_s, result
 
 
-def evaluate(servers: list[Server], params: SearchParams, offsets: list[float]) -> float:
-    """Assign offsets to servers round-robin (each server gets one offset per batch)."""
-    shuffled_offsets = offsets[:]
-    random.shuffle(shuffled_offsets)
+def evaluate(hosts: list[str], params: SearchParams, offsets: list[float]) -> float:
+    """Test params across all offsets and hosts fully in parallel."""
+    jobs = [(host, off) for off in offsets for host in hosts]
 
-    # Deal offsets to servers like cards -- each server gets sequential offsets
-    batches: list[list[tuple[Server, float]]] = []
-    for i in range(0, len(shuffled_offsets), len(servers)):
-        batch = []
-        for j, off in enumerate(shuffled_offsets[i:i + len(servers)]):
-            batch.append((servers[j], off))
-        batches.append(batch)
+    with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+        futures = [pool.submit(run_one, host, off, params) for host, off in jobs]
+        results = [f.result() for f in futures]
 
     total_err = 0
-    count = 0
+    for host, offset_s, result_us in sorted(results, key=lambda r: (r[1], r[0])):
+        expected_us = int(offset_s * 1_000_000)
+        if result_us is None:
+            print(f"    {host} offset={offset_s:+.1f}s -> FAIL")
+            return 10_000_000
+        err = abs(result_us - expected_us)
+        total_err += err
+        print(f"    {host} offset={offset_s:+.1f}s -> measured={result_us:+d}us expected={expected_us:+d}us err={err}us")
 
-    for batch in batches:
-        with ThreadPoolExecutor(max_workers=len(batch)) as pool:
-            futures = [pool.submit(nudge_and_measure, srv, off, params) for srv, off in batch]
-            for f in futures:
-                host, offset_s, result_us = f.result()
-                expected_us = int(offset_s * 1_000_000)
-                if result_us is None:
-                    print(f"    {host} offset={offset_s:+.1f}s -> FAIL")
-                    return 10_000_000
-                err = abs(result_us - expected_us)
-                total_err += err
-                count += 1
-                print(f"    {host} offset={offset_s:+.1f}s -> measured={result_us:+d}us expected={expected_us:+d}us err={err}us")
-
-    avg_err = total_err / count
+    avg_err = total_err / len(results)
     print(f"  => avg_err={avg_err:.0f}us")
     return avg_err
 
 
 def main():
     ap = argparse.ArgumentParser(description="Tune test-http parameters with optuna")
-    ap.add_argument("hosts", nargs="+", help="host IPs to test (also used for ssh as root@<ip>)")
+    ap.add_argument("hosts", nargs="+", help="host:port of fake time servers")
     ap.add_argument("--trials", type=int, default=2000, help="Number of trials")
     ap.add_argument("--offsets", type=float, nargs="+", default=OFFSETS_S,
                      help="Clock offsets to test (seconds)")
     args = ap.parse_args()
 
-    servers = [Server(host=ip, ssh=f"root@{ip}") for ip in args.hosts]
-
-    # Stop chrony on all servers so it doesn't fight date -s
-    for srv in servers:
-        srv.ssh_cmd("systemctl stop chrony 2>/dev/null; true")
-
     def objective(trial: optuna.Trial) -> float:
         params = SearchParams.from_trial(trial)
-        return evaluate(servers, params, args.offsets)
+        return evaluate(args.hosts, params, args.offsets)
 
     study = optuna.create_study(
         direction="minimize",
@@ -142,10 +108,6 @@ def main():
         study.optimize(objective, n_trials=args.trials)
     except KeyboardInterrupt:
         print("\nInterrupted, showing results so far...")
-
-    for srv in servers:
-        srv.ssh_cmd("systemctl start chrony 2>/dev/null; true")
-        srv.set_time(0)
 
     print(f"\n{'='*60}")
     if len(study.trials) > 0 and study.best_trial.value is not None:

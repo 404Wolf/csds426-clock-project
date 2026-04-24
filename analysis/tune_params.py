@@ -90,6 +90,7 @@ def main():
     ap = argparse.ArgumentParser(description="Tune test-http parameters with optuna")
     ap.add_argument("hosts", nargs="+", help="host:port of fake time servers")
     ap.add_argument("--trials", type=int, default=2000, help="Number of trials")
+    ap.add_argument("--jobs", type=int, default=1, help="Parallel trials")
     ap.add_argument("--offsets", type=float, nargs="+", default=OFFSETS_S,
                      help="Clock offsets to test (seconds)")
     args = ap.parse_args()
@@ -105,7 +106,7 @@ def main():
         load_if_exists=True,
     )
     try:
-        study.optimize(objective, n_trials=args.trials)
+        study.optimize(objective, n_trials=args.trials, n_jobs=args.jobs)
     except KeyboardInterrupt:
         print("\nInterrupted, showing results so far...")
 

@@ -137,6 +137,7 @@ fn main() {
         initial_half_span_us: args.initial_half_span_us,
         min_step_us: args.min_step_us,
         sanity_max_offset_secs: args.sanity_max_offset_secs,
+        shrink_factor: 2,
     };
 
     let resume_after = get_latest_batch(&args.output);

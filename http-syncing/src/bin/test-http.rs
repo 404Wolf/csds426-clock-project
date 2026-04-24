@@ -26,6 +26,9 @@ struct Args {
     /// Skip binary search and report raw offset if server clock differs by more than this many seconds
     #[arg(long, default_value_t = 5)]
     sanity_max_offset_secs: i64,
+    /// Factor by which to shrink the search window each round
+    #[arg(long, default_value_t = 2)]
+    shrink_factor: i64,
     /// Write per-probe details to this CSV
     #[arg(long)]
     probe_csv: Option<PathBuf>,
@@ -33,6 +36,7 @@ struct Args {
 
 #[derive(Serialize)]
 struct ProbeRow {
+    host: String,
     round: u32,
     request: u32,
     offset_micros: i64,
@@ -63,12 +67,13 @@ fn main() {
         initial_half_span_us: args.initial_half_span_us,
         min_step_us: args.min_step_us,
         sanity_max_offset_secs: args.sanity_max_offset_secs,
+        shrink_factor: args.shrink_factor,
     };
 
     match clocks::measure_host_with_config(&url, &args.method, &cfg) {
         Ok(result) => {
             match result.offset {
-                Some(offset) => println!("http_clock_offset_ms={}ms", offset.num_milliseconds()),
+                Some(offset) => println!("http_clock_offset_us={}us", offset.num_microseconds().unwrap_or(0)),
                 None => println!("frozen clock"),
             }
 
@@ -78,6 +83,7 @@ fn main() {
                     let send_at_us = p.send_at.timestamp_micros();
                     let receive_at_us = p.receive_at.timestamp_micros();
                     wtr.serialize(ProbeRow {
+                        host: p.host.clone(),
                         round: p.run_num,
                         request: p.request_num,
                         offset_micros: p.offset_micros,

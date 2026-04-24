@@ -22,18 +22,12 @@ class Server:
     ssh: str  # e.g. "root@1.2.3.4"
 
     def ssh_cmd(self, cmd: str) -> None:
-        subprocess.run(["ssh", self.ssh, cmd], capture_output=True, timeout=15)
+        subprocess.run(["ssh", self.ssh, cmd], capture_output=True, timeout=30)
 
-    def nudge_time(self, offset_s: float) -> None:
-        # Sync clock, stop chrony, apply offset -- all on the remote
-        self.ssh_cmd("chronyc makestep 2>/dev/null; systemctl stop chrony")
-        self.ssh_cmd(
-            f"date -s @$(echo \"$(date +%s.%N) + {offset_s}\" | bc)"
-        )
-
-    def sync_time(self) -> None:
-        """Restore real time via chrony."""
-        self.ssh_cmd("systemctl start chrony && chronyc makestep")
+    def set_time(self, offset_s: float = 0) -> None:
+        """Set remote clock to local time + offset."""
+        target = time.time() + offset_s
+        self.ssh_cmd(f"date -s @{target:.3f}")
 
 
 @dataclass
@@ -80,9 +74,9 @@ def measure(host: str, params: SearchParams, timeout: int = 60) -> int | None:
 
 def nudge_and_measure(srv: Server, offset_s: float, params: SearchParams) -> tuple[str, float, int | None]:
     """Set server clock to offset, measure, restore clock, return (host, offset, result)."""
-    srv.nudge_time(offset_s)
+    srv.set_time(offset_s)
     result = measure(srv.host, params)
-    srv.sync_time()
+    srv.set_time(0)
     return srv.host, offset_s, result
 
 
@@ -131,6 +125,10 @@ def main():
 
     servers = [Server(host=ip, ssh=f"root@{ip}") for ip in args.hosts]
 
+    # Stop chrony on all servers so it doesn't fight date -s
+    for srv in servers:
+        srv.ssh_cmd("systemctl stop chrony 2>/dev/null; true")
+
     def objective(trial: optuna.Trial) -> float:
         params = SearchParams.from_trial(trial)
         return evaluate(servers, params, args.offsets)
@@ -147,7 +145,8 @@ def main():
         print("\nInterrupted, showing results so far...")
 
     for srv in servers:
-        srv.sync_time()
+        srv.ssh_cmd("systemctl start chrony 2>/dev/null; true")
+        srv.set_time(0)
 
     print(f"\n{'='*60}")
     if len(study.trials) > 0 and study.best_trial.value is not None:

@@ -2,7 +2,8 @@
 """Use optuna to find test-http parameters that minimize clock offset error."""
 
 import argparse
-import random
+import csv
+import os
 import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
@@ -12,7 +13,7 @@ import optuna
 
 OFFSET_RE = re.compile(r"http_clock_offset_us=(-?\d+)us")
 
-OFFSETS_S = [-5, -1, -0.5, -0.1, 0, 0.1, 0.5, 1, 5]
+OFFSETS_S = [-1, -0.1, -0.01, 0, 0.01, 0.1, 1]
 
 
 @dataclass
@@ -63,11 +64,33 @@ def run_one(host: str, offset_s: float, params: SearchParams) -> tuple[str, floa
     return host, offset_s, result
 
 
-def evaluate(hosts: list[str], params: SearchParams, offsets: list[float], reps: int = 2) -> float:
+MEASUREMENTS_CSV = "tune_measurements.csv"
+CSV_FIELDS = ["trial", "host", "offset_s", "expected_us", "measured_us", "err_us",
+              "rounds", "probes", "half_span_us", "min_step_us", "method", "shrink_factor"]
+
+
+def ensure_csv():
+    if not os.path.exists(MEASUREMENTS_CSV):
+        with open(MEASUREMENTS_CSV, "w", newline="") as f:
+            csv.writer(f).writerow(CSV_FIELDS)
+
+
+def log_measurement(trial: int, host: str, offset_s: float, expected_us: int,
+                    measured_us: int, err_us: int, params: SearchParams):
+    with open(MEASUREMENTS_CSV, "a", newline="") as f:
+        csv.writer(f).writerow([
+            trial, host, offset_s, expected_us, measured_us, err_us,
+            params.rounds, params.probes, params.half_span_us,
+            params.min_step_us, params.method, params.shrink_factor,
+        ])
+
+
+def evaluate(hosts: list[str], params: SearchParams, offsets: list[float],
+             reps: int = 2, trial_num: int = 0) -> float:
     """Test params across all offsets and hosts fully in parallel, repeated reps times."""
     jobs = [(host, off) for _ in range(reps) for off in offsets for host in hosts]
 
-    with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+    with ThreadPoolExecutor(max_workers=len(hosts)) as pool:
         futures = [pool.submit(run_one, host, off, params) for host, off in jobs]
         results = [f.result() for f in futures]
 
@@ -79,6 +102,7 @@ def evaluate(hosts: list[str], params: SearchParams, offsets: list[float], reps:
             return 10_000_000
         err = abs(result_us - expected_us)
         total_err += err
+        log_measurement(trial_num, host, offset_s, expected_us, result_us, err, params)
         print(f"    {host} offset={offset_s:+.1f}s -> measured={result_us:+d}us expected={expected_us:+d}us err={err}us")
 
     avg_err = total_err / len(results)
@@ -89,16 +113,18 @@ def evaluate(hosts: list[str], params: SearchParams, offsets: list[float], reps:
 def main():
     ap = argparse.ArgumentParser(description="Tune test-http parameters with optuna")
     ap.add_argument("hosts", nargs="+", help="host:port of fake time servers")
-    ap.add_argument("--trials", type=int, default=2000, help="Number of trials")
+    ap.add_argument("--trials", type=int, default=200000, help="Number of trials")
     ap.add_argument("--jobs", type=int, default=1, help="Parallel trials")
     ap.add_argument("--reps", type=int, default=2, help="Repetitions per (host, offset) pair")
     ap.add_argument("--offsets", type=float, nargs="+", default=OFFSETS_S,
                      help="Clock offsets to test (seconds)")
     args = ap.parse_args()
 
+    ensure_csv()
+
     def objective(trial: optuna.Trial) -> float:
         params = SearchParams.from_trial(trial)
-        return evaluate(args.hosts, params, args.offsets, args.reps)
+        return evaluate(args.hosts, params, args.offsets, args.reps, trial.number)
 
     study = optuna.create_study(
         direction="minimize",

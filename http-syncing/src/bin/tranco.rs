@@ -56,7 +56,11 @@ fn main() {
     let total = rows.len();
     info!("{total} rows in input");
 
-    assert!(total >= args.sample, "input has {total} rows, need {}", args.sample);
+    assert!(
+        total >= args.sample,
+        "input has {total} rows, need {}",
+        args.sample
+    );
 
     // Evenly sample
     let step = total as f64 / args.sample as f64;
@@ -84,15 +88,21 @@ fn main() {
     // Write output
     let out_file = File::create(&args.output).expect("failed to create output CSV");
     let mut wtr = csv::Writer::from_writer(out_file);
-    wtr.write_record(["batch_num", "ip", "hostname", "rtt_ms", "is_http", "had_date", "clock_offset_ms"])
-        .unwrap();
+    wtr.write_record([
+        "batch_num",
+        "ip",
+        "hostname",
+        "rtt_ms",
+        "is_http",
+        "had_date",
+        "clock_offset_ms",
+    ])
+    .unwrap();
 
     for (_, domain, ip) in &resolved {
         if let Some(ip) = ip {
-            wtr.write_record([
-                "0", ip, domain, "10.0", "false", "true", "0",
-            ])
-            .unwrap();
+            wtr.write_record(["0", ip, domain, "10.0", "false", "true", "0"])
+                .unwrap();
         }
     }
     wtr.flush().unwrap();

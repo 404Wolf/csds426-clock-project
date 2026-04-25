@@ -42,7 +42,8 @@ fn main() {
             Ok(result) => match result.offset {
                 Some(offset) => {
                     info!("{host}: {}ms", offset.num_milliseconds());
-                    wtr.write_record([host.as_str(), &offset.num_milliseconds().to_string()]).unwrap();
+                    wtr.write_record([host.as_str(), &offset.num_milliseconds().to_string()])
+                        .unwrap();
                 }
                 None => {
                     info!("{host}: frozen clock");

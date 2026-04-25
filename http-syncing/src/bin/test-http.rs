@@ -73,7 +73,10 @@ fn main() {
     match clocks::measure_host_with_config(&url, &args.method, &cfg) {
         Ok(result) => {
             match result.offset {
-                Some(offset) => println!("http_clock_offset_us={}us", offset.num_microseconds().unwrap_or(0)),
+                Some(offset) => println!(
+                    "http_clock_offset_us={}us",
+                    offset.num_microseconds().unwrap_or(0)
+                ),
                 None => println!("frozen clock"),
             }
 
@@ -91,7 +94,8 @@ fn main() {
                         receive_at_us,
                         rtt_us: receive_at_us - send_at_us,
                         server_unix_s: p.server.timestamp(),
-                    }).expect("failed to write probe row");
+                    })
+                    .expect("failed to write probe row");
                 }
                 wtr.flush().expect("failed to flush probe CSV");
             }

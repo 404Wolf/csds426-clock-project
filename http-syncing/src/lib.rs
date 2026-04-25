@@ -110,7 +110,10 @@ pub fn sleep_until_and_get_date(
     fire_at: DateTime<Utc>,
     method: &str,
 ) -> Result<(DateTime<Utc>, DateTime<Utc>, DateTime<Utc>)> {
-    let sleep_us = (fire_at - chrono::Utc::now()).num_microseconds().unwrap_or(0).max(0);
+    let sleep_us = (fire_at - chrono::Utc::now())
+        .num_microseconds()
+        .unwrap_or(0)
+        .max(0);
     spin_sleep::sleep(std::time::Duration::from_micros(sleep_us as u64));
 
     let sent_at = chrono::Utc::now();
@@ -255,7 +258,10 @@ fn search(
         let diff_ms = clock_diff_for_pair(&pair).num_milliseconds();
         info!(
             "round {}: HIT boundary at {}µs (±{}ms window), diff={}ms",
-            round_num, new_center, half_span_us / 1000, diff_ms
+            round_num,
+            new_center,
+            half_span_us / 1000,
+            diff_ms
         );
         let round_result = RoundResult {
             round_num,
@@ -264,14 +270,25 @@ fn search(
             center_us: new_center,
         };
         let (final_pair, mut rest, mut sub_probes) = search(
-            agent, url, method, new_center, half_span_us / cfg.shrink_factor, rounds_left - 1, round_num + 1, cfg,
+            agent,
+            url,
+            method,
+            new_center,
+            half_span_us / cfg.shrink_factor,
+            rounds_left - 1,
+            round_num + 1,
+            cfg,
         );
         rest.insert(0, round_result);
         let mut all_probes = rows;
         all_probes.append(&mut sub_probes);
         (Some(final_pair.unwrap_or(pair)), rest, all_probes)
     } else {
-        info!("round {}: miss (±{}ms window)", round_num, half_span_us / 1000);
+        info!(
+            "round {}: miss (±{}ms window)",
+            round_num,
+            half_span_us / 1000
+        );
         let round_result = RoundResult {
             round_num,
             diff_ms: None,
@@ -282,7 +299,14 @@ fn search(
             return (None, vec![round_result], rows); // frozen clock — bail immediately
         }
         let (final_pair, mut rest, mut sub_probes) = search(
-            agent, url, method, center_us, half_span_us / cfg.shrink_factor, rounds_left - 1, round_num + 1, cfg,
+            agent,
+            url,
+            method,
+            center_us,
+            half_span_us / cfg.shrink_factor,
+            rounds_left - 1,
+            round_num + 1,
+            cfg,
         );
         rest.insert(0, round_result);
         let mut all_probes = rows;
@@ -294,7 +318,11 @@ fn search(
 /// Run one full HTTP clock measurement against a URL using the given method and config.
 /// Uses recursive binary search to home in on the second boundary, then computes
 /// the clock offset from the tightest boundary pair found.
-pub fn measure_host_with_config(url: &str, method: &str, cfg: &SearchConfig) -> Result<MeasurementResult> {
+pub fn measure_host_with_config(
+    url: &str,
+    method: &str,
+    cfg: &SearchConfig,
+) -> Result<MeasurementResult> {
     let agent = make_agent();
 
     let (sanity_date, _) = request_http_date(&agent, url, method)?;
@@ -307,11 +335,24 @@ pub fn measure_host_with_config(url: &str, method: &str, cfg: &SearchConfig) -> 
         });
     }
 
-    let (pair, rounds, probes) = search(&agent, url, method, 0, cfg.initial_half_span_us, cfg.num_rounds, 1, cfg);
+    let (pair, rounds, probes) = search(
+        &agent,
+        url,
+        method,
+        0,
+        cfg.initial_half_span_us,
+        cfg.num_rounds,
+        1,
+        cfg,
+    );
     match pair {
         None => {
             info!("{url} appears to have a frozen clock");
-            Ok(MeasurementResult { offset: None, rounds, probes })
+            Ok(MeasurementResult {
+                offset: None,
+                rounds,
+                probes,
+            })
         }
         Some(pair) => Ok(MeasurementResult {
             offset: Some(clock_diff_for_pair(&pair)),
@@ -339,8 +380,8 @@ mod tests {
 
         assert_eq!(times.len(), 3);
         assert_eq!(times[0], b + TimeDelta::microseconds(-500_000)); // 09.500
-        assert_eq!(times[1], b + TimeDelta::microseconds(0));        // 10.000
-        assert_eq!(times[2], b + TimeDelta::microseconds(500_000));  // 10.500
+        assert_eq!(times[1], b + TimeDelta::microseconds(0)); // 10.000
+        assert_eq!(times[2], b + TimeDelta::microseconds(500_000)); // 10.500
     }
 
     #[test]
@@ -353,10 +394,10 @@ mod tests {
         assert_eq!(times.len(), 6);
         assert_eq!(times[0], b + TimeDelta::microseconds(-2_500_000)); // 07.500
         assert_eq!(times[1], b + TimeDelta::microseconds(-1_500_000)); // 08.500
-        assert_eq!(times[2], b + TimeDelta::microseconds(-500_000));   // 09.500
-        assert_eq!(times[3], b + TimeDelta::microseconds(500_000));    // 10.500
-        assert_eq!(times[4], b + TimeDelta::microseconds(1_500_000));  // 11.500
-        assert_eq!(times[5], b + TimeDelta::microseconds(2_500_000));  // 12.500
+        assert_eq!(times[2], b + TimeDelta::microseconds(-500_000)); // 09.500
+        assert_eq!(times[3], b + TimeDelta::microseconds(500_000)); // 10.500
+        assert_eq!(times[4], b + TimeDelta::microseconds(1_500_000)); // 11.500
+        assert_eq!(times[5], b + TimeDelta::microseconds(2_500_000)); // 12.500
     }
 
     #[test]
@@ -366,9 +407,9 @@ mod tests {
         let times = probe_fire_times(b, 200_000, 100_000, 3);
 
         assert_eq!(times.len(), 3);
-        assert_eq!(times[0], b + TimeDelta::microseconds(100_000));  // 10.100
-        assert_eq!(times[1], b + TimeDelta::microseconds(200_000));  // 10.200
-        assert_eq!(times[2], b + TimeDelta::microseconds(300_000));  // 10.300
+        assert_eq!(times[0], b + TimeDelta::microseconds(100_000)); // 10.100
+        assert_eq!(times[1], b + TimeDelta::microseconds(200_000)); // 10.200
+        assert_eq!(times[2], b + TimeDelta::microseconds(300_000)); // 10.300
     }
 
     #[test]
@@ -378,9 +419,19 @@ mod tests {
         let b = next_boundary(100_000);
         let ahead_us = (b - before).num_microseconds().unwrap();
 
-        assert!(ahead_us >= 100_000, "boundary only {ahead_us}µs ahead, need ≥100000");
-        assert!(ahead_us < 2_000_000, "boundary {ahead_us}µs ahead, should be <2s");
-        assert_eq!(b.timestamp_subsec_micros(), 0, "boundary not on an exact second");
+        assert!(
+            ahead_us >= 100_000,
+            "boundary only {ahead_us}µs ahead, need ≥100000"
+        );
+        assert!(
+            ahead_us < 2_000_000,
+            "boundary {ahead_us}µs ahead, should be <2s"
+        );
+        assert_eq!(
+            b.timestamp_subsec_micros(),
+            0,
+            "boundary not on an exact second"
+        );
     }
 
     #[test]
@@ -391,8 +442,18 @@ mod tests {
         let b = next_boundary(2_500_000);
         let ahead_us = (b - before).num_microseconds().unwrap();
 
-        assert!(ahead_us >= 2_500_000, "boundary only {ahead_us}µs ahead, need ≥2500000");
-        assert!(ahead_us < 4_500_000, "boundary {ahead_us}µs ahead, should be <4.5s");
-        assert_eq!(b.timestamp_subsec_micros(), 0, "boundary not on an exact second");
+        assert!(
+            ahead_us >= 2_500_000,
+            "boundary only {ahead_us}µs ahead, need ≥2500000"
+        );
+        assert!(
+            ahead_us < 4_500_000,
+            "boundary {ahead_us}µs ahead, should be <4.5s"
+        );
+        assert_eq!(
+            b.timestamp_subsec_micros(),
+            0,
+            "boundary not on an exact second"
+        );
     }
 }

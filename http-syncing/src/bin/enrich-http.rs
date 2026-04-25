@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::path::PathBuf;
 
+use chrono::{DateTime, Utc};
 use clap::Parser;
 use log::{info, warn};
 use rayon::prelude::*;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 const BATCH_SIZE: usize = 4;
@@ -106,8 +106,17 @@ fn get_latest_batch(path: &PathBuf) -> Option<u64> {
 
 fn build_header(num_rounds: u32) -> Vec<String> {
     let mut h: Vec<String> = vec![
-        "batch_num", "ip", "hostname", "icmp_rtt_ms", "icmp_clock_offset_ms",
-        "http_clock_offset_ms", "is_frozen_clock", "country", "city", "latitude", "longitude",
+        "batch_num",
+        "ip",
+        "hostname",
+        "icmp_rtt_ms",
+        "icmp_clock_offset_ms",
+        "http_clock_offset_ms",
+        "is_frozen_clock",
+        "country",
+        "city",
+        "latitude",
+        "longitude",
     ]
     .into_iter()
     .map(str::to_string)
@@ -157,7 +166,10 @@ fn main() {
         .deserialize::<InputRecord>()
         .filter_map(|r| match r {
             Ok(rec) => Some(rec),
-            Err(e) => { warn!("skipping malformed row: {e}"); None }
+            Err(e) => {
+                warn!("skipping malformed row: {e}");
+                None
+            }
         })
         .filter(|r| (r.had_date && r.clock_offset_ms.is_some()) || r.success == 1)
         .collect();
@@ -179,12 +191,14 @@ fn main() {
     let mut wtr = csv::Writer::from_writer(out_file);
 
     if !append {
-        wtr.write_record(&build_header(cfg.num_rounds)).expect("failed to write header");
+        wtr.write_record(&build_header(cfg.num_rounds))
+            .expect("failed to write header");
     }
 
-    let mut probe_wtr = args.probe_csv.as_ref().map(|path| {
-        csv::Writer::from_path(path).expect("failed to open probe CSV")
-    });
+    let mut probe_wtr = args
+        .probe_csv
+        .as_ref()
+        .map(|path| csv::Writer::from_path(path).expect("failed to open probe CSV"));
 
     let start_batch = resume_after.map_or(0, |b| b + 1);
 
@@ -205,7 +219,10 @@ fn main() {
                             "{} icmp_offset={}ms http_offset={}",
                             rec.ip,
                             rec.clock_offset_ms.unwrap_or(0),
-                            result.offset.map_or("frozen".to_string(), |d| format!("{}ms", d.num_milliseconds())),
+                            result.offset.map_or("frozen".to_string(), |d| format!(
+                                "{}ms",
+                                d.num_milliseconds()
+                            )),
                         );
 
                         // Index rounds by round_num for O(1) lookup
@@ -218,7 +235,9 @@ fn main() {
                             rec.hostname.clone(),
                             rec.rtt_ms.to_string(),
                             rec.clock_offset_ms.unwrap_or(0).to_string(),
-                            result.offset.map_or(String::new(), |d| d.num_milliseconds().to_string()),
+                            result
+                                .offset
+                                .map_or(String::new(), |d| d.num_milliseconds().to_string()),
                             frozen.to_string(),
                             rec.country.clone(),
                             rec.city.clone(),
@@ -264,12 +283,16 @@ fn main() {
                         receive_at: p.receive_at,
                         server: p.server,
                         rtt_us: (p.receive_at - p.send_at).num_microseconds().unwrap_or(0),
-                    }).expect("failed to write probe row");
+                    })
+                    .expect("failed to write probe row");
                 }
                 pw.flush().expect("failed to flush probe CSV");
             }
         }
         wtr.flush().expect("failed to flush");
-        info!("batch {batch_num} done ({succeeded}/{} succeeded)", chunk.len());
+        info!(
+            "batch {batch_num} done ({succeeded}/{} succeeded)",
+            chunk.len()
+        );
     }
 }

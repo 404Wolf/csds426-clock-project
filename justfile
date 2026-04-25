@@ -24,6 +24,11 @@ tranco INPUT OUTPUT *ARGS:
 enrich-http INPUT OUTPUT *ARGS:
     RUSTFLAGS="-C target-cpu=native" cargo run --release --bin enrich-http -- {{INPUT}} {{OUTPUT}} {{ARGS}}
 
+enrich-http-golden INPUT OUTPUT *ARGS:
+    RUSTFLAGS="-C target-cpu=native" cargo run --release --bin enrich-http -- {{INPUT}} {{OUTPUT}} \
+        --rounds 17 --probes 18 --initial-half-span-us 1750000 \
+        --min-step-us 4300 --shrink-factor 5 --method HEAD --best-of 2 {{ARGS}}
+
 analyze-all:
     #!/usr/bin/env bash
     set -e

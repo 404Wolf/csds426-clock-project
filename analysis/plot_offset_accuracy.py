@@ -29,7 +29,7 @@ for col, (title, gdf) in enumerate(groups, start=1):
         fig.add_trace(go.Box(y=vals, name=str(off), boxpoints=False, showlegend=(col == 1)),
                       row=1, col=col)
 
-    for p in [0.50, 0.90, 0.95, 0.99]:
+    for p in [0.50, 0.90]:
         val = gdf["err_us"].quantile(p) / 1000
         fig.add_hline(y=val, line_dash="dash", line_color="red", row=1, col=col)
         fig.add_annotation(
@@ -40,7 +40,9 @@ for col, (title, gdf) in enumerate(groups, start=1):
         )
         print(f"{title} p{int(p*100)}: {val:.1f}ms")
 
+p99_ms = df["err_us"].quantile(0.99) / 1000
 fig.update_yaxes(title_text="|error| (ms)", col=1)
+fig.update_yaxes(range=[0, p99_ms])
 fig.update_xaxes(title_text="Clock offset (s)")
 fig.update_layout(title="Measurement error by clock offset")
 fig.write_html("plot_offset_accuracy.html")

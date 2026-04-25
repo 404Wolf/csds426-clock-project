@@ -1,10 +1,11 @@
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
 
+use chrono::{Duration, Utc};
 use tiny_http::{Header, Response, Server};
 
 fn fake_date(offset_s: f64) -> String {
-    httpdate::fmt_http_date(SystemTime::now() + Duration::from_secs_f64(offset_s))
+    let t = Utc::now() + Duration::microseconds((offset_s * 1_000_000.0) as i64);
+    httpdate::fmt_http_date(t.into())
 }
 
 fn handle(request: tiny_http::Request) {

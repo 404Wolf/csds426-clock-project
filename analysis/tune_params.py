@@ -12,7 +12,7 @@ import optuna
 
 OFFSET_RE = re.compile(r"http_clock_offset_us=(-?\d+)us")
 
-OFFSETS_S = [-5, -1, -0.5, -0.1, 0.1, 0.5, 1, 5]
+OFFSETS_S = [-5, -1, -0.5, -0.1, 0, 0.1, 0.5, 1, 5]
 
 
 @dataclass
@@ -63,9 +63,9 @@ def run_one(host: str, offset_s: float, params: SearchParams) -> tuple[str, floa
     return host, offset_s, result
 
 
-def evaluate(hosts: list[str], params: SearchParams, offsets: list[float]) -> float:
-    """Test params across all offsets and hosts fully in parallel."""
-    jobs = [(host, off) for off in offsets for host in hosts]
+def evaluate(hosts: list[str], params: SearchParams, offsets: list[float], reps: int = 2) -> float:
+    """Test params across all offsets and hosts fully in parallel, repeated reps times."""
+    jobs = [(host, off) for _ in range(reps) for off in offsets for host in hosts]
 
     with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
         futures = [pool.submit(run_one, host, off, params) for host, off in jobs]
@@ -91,13 +91,14 @@ def main():
     ap.add_argument("hosts", nargs="+", help="host:port of fake time servers")
     ap.add_argument("--trials", type=int, default=2000, help="Number of trials")
     ap.add_argument("--jobs", type=int, default=1, help="Parallel trials")
+    ap.add_argument("--reps", type=int, default=2, help="Repetitions per (host, offset) pair")
     ap.add_argument("--offsets", type=float, nargs="+", default=OFFSETS_S,
                      help="Clock offsets to test (seconds)")
     args = ap.parse_args()
 
     def objective(trial: optuna.Trial) -> float:
         params = SearchParams.from_trial(trial)
-        return evaluate(args.hosts, params, args.offsets)
+        return evaluate(args.hosts, params, args.offsets, args.reps)
 
     study = optuna.create_study(
         direction="minimize",

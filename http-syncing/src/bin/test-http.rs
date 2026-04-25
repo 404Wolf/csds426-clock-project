@@ -71,6 +71,7 @@ fn main() {
         min_step_us: args.min_step_us,
         sanity_max_offset_secs: args.sanity_max_offset_secs,
         shrink_factor: args.shrink_factor,
+        best_of: 1,
     };
 
     let result = (0..args.best_of.max(1))

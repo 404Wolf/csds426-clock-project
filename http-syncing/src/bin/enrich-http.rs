@@ -44,6 +44,12 @@ struct Args {
     /// Stop recursing when the probe step drops below this many microseconds
     #[arg(long, default_value_t = 1_000)]
     min_step_us: i64,
+    /// Factor by which to shrink the search window each round
+    #[arg(long, default_value_t = 2)]
+    shrink_factor: i64,
+    /// Run each host this many times and keep the best result
+    #[arg(long, default_value_t = 1)]
+    best_of: u32,
     /// Skip binary search and report raw offset if server clock differs by more than this many seconds
     #[arg(long, default_value_t = 5)]
     sanity_max_offset_secs: i64,
@@ -146,7 +152,8 @@ fn main() {
         initial_half_span_us: args.initial_half_span_us,
         min_step_us: args.min_step_us,
         sanity_max_offset_secs: args.sanity_max_offset_secs,
-        shrink_factor: 2,
+        shrink_factor: args.shrink_factor,
+        best_of: args.best_of,
     };
 
     let resume_after = get_latest_batch(&args.output);

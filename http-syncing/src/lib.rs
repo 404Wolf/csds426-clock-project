@@ -70,6 +70,8 @@ pub struct SearchConfig {
     pub sanity_max_offset_secs: i64,
     /// Factor by which to shrink the search window each round (default 2).
     pub shrink_factor: i64,
+    /// Run measurement this many times and return the result with the tightest final window.
+    pub best_of: u32,
 }
 
 impl Default for SearchConfig {
@@ -81,6 +83,7 @@ impl Default for SearchConfig {
             min_step_us: 1_000,
             sanity_max_offset_secs: 5,
             shrink_factor: 2,
+            best_of: 1,
         }
     }
 }
@@ -318,14 +321,8 @@ fn search(
 /// Run one full HTTP clock measurement against a URL using the given method and config.
 /// Uses recursive binary search to home in on the second boundary, then computes
 /// the clock offset from the tightest boundary pair found.
-pub fn measure_host_with_config(
-    url: &str,
-    method: &str,
-    cfg: &SearchConfig,
-) -> Result<MeasurementResult> {
-    let agent = make_agent();
-
-    let (sanity_date, _) = request_http_date(&agent, url, method)?;
+fn measure_once(agent: &Agent, url: &str, method: &str, cfg: &SearchConfig) -> Result<MeasurementResult> {
+    let (sanity_date, _) = request_http_date(agent, url, method)?;
     let now = chrono::Utc::now();
     if (sanity_date - now).num_seconds().abs() > cfg.sanity_max_offset_secs {
         return Ok(MeasurementResult {
@@ -335,24 +332,11 @@ pub fn measure_host_with_config(
         });
     }
 
-    let (pair, rounds, probes) = search(
-        &agent,
-        url,
-        method,
-        0,
-        cfg.initial_half_span_us,
-        cfg.num_rounds,
-        1,
-        cfg,
-    );
+    let (pair, rounds, probes) = search(agent, url, method, 0, cfg.initial_half_span_us, cfg.num_rounds, 1, cfg);
     match pair {
         None => {
             info!("{url} appears to have a frozen clock");
-            Ok(MeasurementResult {
-                offset: None,
-                rounds,
-                probes,
-            })
+            Ok(MeasurementResult { offset: None, rounds, probes })
         }
         Some(pair) => Ok(MeasurementResult {
             offset: Some(clock_diff_for_pair(&pair)),
@@ -360,6 +344,40 @@ pub fn measure_host_with_config(
             probes,
         }),
     }
+}
+
+/// Tightness of a result: smaller final window = better. None (frozen) is worst.
+fn tightest_window_ms(result: &MeasurementResult) -> i64 {
+    result.rounds.iter()
+        .filter(|r| r.diff_ms.is_some())
+        .map(|r| r.window_half_ms)
+        .min()
+        .unwrap_or(i64::MAX)
+}
+
+pub fn measure_host_with_config(
+    url: &str,
+    method: &str,
+    cfg: &SearchConfig,
+) -> Result<MeasurementResult> {
+    let agent = make_agent();
+    let mut best: Option<MeasurementResult> = None;
+    for _ in 0..cfg.best_of.max(1) {
+        match measure_once(&agent, url, method, cfg) {
+            Ok(result) => {
+                let better = best.as_ref().map_or(true, |b| tightest_window_ms(&result) < tightest_window_ms(b));
+                if better {
+                    best = Some(result);
+                }
+            }
+            Err(e) => {
+                if best.is_none() {
+                    return Err(e);
+                }
+            }
+        }
+    }
+    Ok(best.unwrap())
 }
 
 #[cfg(test)]

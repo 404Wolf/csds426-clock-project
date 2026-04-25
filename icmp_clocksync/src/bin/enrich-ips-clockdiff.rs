@@ -65,7 +65,8 @@ fn main() {
     let start_batch = resume_after.map_or(0, |b| b + 1);
 
     let valid_rows = iter.filter_map(|r| match r {
-        Ok(rec) => Some(rec),
+        Ok(rec) if rec.ts_nonstandard == 0 => Some(rec),
+        Ok(_) => None,
         Err(e) => {
             eprintln!("skipping bad row: {e}");
             None

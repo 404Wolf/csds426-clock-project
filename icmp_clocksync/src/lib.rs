@@ -20,6 +20,7 @@ pub struct IcmpTimestampRecord {
     pub otime: u64,
     pub rtime: u64,
     pub ttime: u64,
+    pub ts_nonstandard: u8,
     pub rtt_ms: u64,
     pub remote_processing_ms: u64,
     pub classification: String,

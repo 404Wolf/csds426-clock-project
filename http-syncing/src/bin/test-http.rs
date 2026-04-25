@@ -29,6 +29,9 @@ struct Args {
     /// Factor by which to shrink the search window each round
     #[arg(long, default_value_t = 2)]
     shrink_factor: i64,
+    /// Run the full measurement this many times and keep the one with the smallest absolute clock offset
+    #[arg(long, default_value_t = 1)]
+    best_of: u32,
     /// Write per-probe details to this CSV
     #[arg(long)]
     probe_csv: Option<PathBuf>,
@@ -70,8 +73,24 @@ fn main() {
         shrink_factor: args.shrink_factor,
     };
 
-    match clocks::measure_host_with_config(&url, &args.method, &cfg) {
-        Ok(result) => {
+    let result = (0..args.best_of.max(1))
+        .map(|i| {
+            if args.best_of > 1 {
+                eprintln!("run {}/{}", i + 1, args.best_of);
+            }
+            clocks::measure_host_with_config(&url, &args.method, &cfg)
+        })
+        .filter_map(|r| r.ok())
+        .filter_map(|r| r.offset.map(|off| (off.num_microseconds().unwrap_or(i64::MAX).abs(), r)))
+        .min_by_key(|(abs_us, _)| *abs_us)
+        .map(|(_, r)| r);
+
+    match result {
+        None => {
+            eprintln!("all runs failed or returned no offset");
+            std::process::exit(1);
+        }
+        Some(result) => {
             match result.offset {
                 Some(offset) => println!(
                     "http_clock_offset_us={}us",
@@ -99,10 +118,6 @@ fn main() {
                 }
                 wtr.flush().expect("failed to flush probe CSV");
             }
-        }
-        Err(e) => {
-            eprintln!("error: {e}");
-            std::process::exit(1);
         }
     }
 }

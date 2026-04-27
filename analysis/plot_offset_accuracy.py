@@ -47,3 +47,21 @@ fig.update_xaxes(title_text="Clock offset (s)")
 fig.update_layout(title="Measurement error by clock offset")
 fig.write_html("plot_offset_accuracy.html")
 print("saved plot_offset_accuracy.html")
+
+fig2 = go.Figure()
+for i, (title, gdf) in enumerate(groups):
+    vals = gdf["err_us"] / 1000
+    p90 = vals.quantile(0.90)
+    fig2.add_trace(go.Box(y=vals, name=title, boxpoints=False))
+    fig2.add_annotation(
+        x=i, y=p90,
+        text=f"p90={p90:.1f}ms",
+        showarrow=True, arrowhead=2, arrowsize=0.8,
+        ay=-30, ax=40,
+        font=dict(size=12),
+    )
+
+fig2.update_yaxes(title_text="|error| (ms)", range=[0, p99_ms])
+fig2.update_layout(title="Measurement error: Far vs Near (all offsets)")
+fig2.write_html("plot_offset_accuracy_aggregate.html")
+print("saved plot_offset_accuracy_aggregate.html")

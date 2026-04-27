@@ -97,6 +97,7 @@
               inetutils
               uv
               ruff
+              mermaid-cli
               (python3.withPackages (ps: [
                 ps.optuna
                 ps.numpy

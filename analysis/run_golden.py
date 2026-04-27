@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 from itertools import cycle
+from pathlib import Path
 
 OFFSET_RE = re.compile(r"http_clock_offset_us=(-?\d+)us")
 
@@ -22,7 +23,7 @@ GOLDEN_FLAGS = [
 
 OFFSETS_S = [-1, -0.1, -0.01, 0, 0.01, 0.1, 1]
 
-CSV_FILE = "golden_measurements.csv"
+CSV_FILE = Path(__file__).parent.parent / "data" / "golden_measurements.csv"
 CSV_FIELDS = ["run", "host", "offset_s", "expected_us", "measured_us", "err_us"]
 
 

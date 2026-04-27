@@ -88,3 +88,4 @@ Cargo.lock
 /analysis/clock_sync_map.svg
 /probes.csv
 /flake.nix
+/report/report.pdf

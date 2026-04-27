@@ -1,0 +1,10 @@
+%%{init: {'theme': 'base', 'themeVariables': {'noteFontSize': '12px', 'actorFontSize': '13px', 'sequenceNumberColor': 'black'}, 'sequence': {'height': 20, 'noteMargin': 4, 'boxMargin': 4, 'messageMargin': 20, 'mirrorActors': false}}}%%
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    Note over C: T1
+    C->>S: Timestamp Request
+    Note over S: T2
+    Note over S: T3
+    S->>C: Timestamp Reply
+    Note over C: T4

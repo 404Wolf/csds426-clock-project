@@ -104,7 +104,7 @@ The issue with this header it is only a low quality approximation; I seek a very
 
 #figure(
   image("figures/icmp-echo-vs-clockdiff.png"),
-  caption: [Distribution of ICMP echo and timestamp support across responsive IPv4 hosts. Percentages are relative to all hosts that responded to either probe (~375 million total). The majority (58.9%) respond to ping only and do not support ICMP timestamps.],
+  caption: [Distribution of ICMP echo and timestamp support across responsive IPv4 hosts. Percentages are relative to all hosts that responded to either probe (~375 million total). The majority (58.9%) respond to ping only and do not support ICMP timestamps. I find it highly interesting that there exists hosts (which I have manually verified) that *only* support ICMP timestamp messages and do *not* support ICMP echos.],
 ) <fig:icmp-echo-vs-clockdiff>
 
 In most cases, your distro will disable ICMP timestamp messages by default, because it can be used for clock fingerprinting, and is generally not very useful. The main reason you would want to compute the delta of two clocks is for when you are syncing your clock, but for this you are more likely to just use NTP. This paper seeks to find good approximations of the clock difference between a client and server, and it is of value to know how, today, well supported this feature of ICMP is.

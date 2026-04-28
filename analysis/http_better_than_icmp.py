@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Find hosts where HTTP clock offset is closer to zero than ICMP clock offset."""
 
 import pandas as pd
 from pathlib import Path

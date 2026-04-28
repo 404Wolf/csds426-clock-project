@@ -99,7 +99,6 @@ def main() -> None:
         fig.write_image(str(svg_out), width=1200, height=500, scale=2)
         print(f"Wrote {svg_out}")
 
-    # Print summary stats
     for label, s in [("ICMP", icmp), ("HTTP", http)]:
         print(f"{label}: median={s.median():.1f}ms  std={s.std():.1f}ms  "
               f"p90={s.abs().quantile(0.9):.1f}ms  p99={s.abs().quantile(0.99):.1f}ms")

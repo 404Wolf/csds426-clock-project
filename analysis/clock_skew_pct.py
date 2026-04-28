@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Print % of hosts with clocks >5 seconds off from ICMP and HTTP scans."""
 
 import pandas as pd
 from pathlib import Path

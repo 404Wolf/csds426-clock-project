@@ -2,8 +2,13 @@ import argparse
 import math
 from pathlib import Path
 
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
+from matplotlib.colors import LogNorm
+from scipy.interpolate import griddata
 
 
 def fmt_offset(ms: float) -> str:
@@ -42,87 +47,49 @@ def load_clockdiff_data(csv_path: str) -> pd.DataFrame:
     return _enrich(df)
 
 
-# Human-readable colorbar ticks
-_TICK_MAP = {
-    "0ms":   math.log10(0 + 1),
-    "10ms":  math.log10(10 + 1),
-    "100ms": math.log10(100 + 1),
-    "1s":    math.log10(1_000 + 1),
-    "1min":  math.log10(60_000 + 1),
-    "1hr":   math.log10(3_600_000 + 1),
-    "1day":  math.log10(86_400_000 + 1),
-}
+# Colorbar tick positions and labels (log10 scale)
+_TICK_VALS = [math.log10(v + 1) for v in [0, 10, 100, 1_000, 60_000, 3_600_000, 86_400_000]]
+_TICK_LABELS = ["0ms", "10ms", "100ms", "1s", "1min", "1hr", "1day"]
+
+_GRID_RES = 200  # interpolation grid resolution (lon × lat)
 
 
-def build_figure(df: pd.DataFrame, clockdiff_df: pd.DataFrame | None = None) -> go.Figure:
-    hover = df.apply(
-        lambda r: (
-            f"Offset: {r['offset_label']}<br>"
-            f"RTT: {r['rtt_ms']}ms<br>"
-            f"IP: {r['ip']}<br>"
-            f"Host: {r['hostname_display']}<br>"
-            f"Location: {r['city']}, {r['country']}<br>"
-            f"Has HTTP: {r['is_http']}"
-        ),
-        axis=1,
+def build_figure(df: pd.DataFrame, clockdiff_df: pd.DataFrame | None = None) -> plt.Figure:
+    lon_grid, lat_grid = np.meshgrid(
+        np.linspace(-180, 180, _GRID_RES * 2),
+        np.linspace(-90, 90, _GRID_RES),
+    )
+    z = griddata(
+        (df["longitude"].values, df["latitude"].values),
+        df["log_offset"].values,
+        (lon_grid, lat_grid),
+        method="linear",
     )
 
-    traces = [
-        go.Scattergeo(
-            lat=df["latitude"],
-            lon=df["longitude"],
-            mode="markers",
-            marker=dict(
-                size=3,
-                color=df["log_offset"],
-                colorscale="RdYlGn_r",
-                cmin=0,
-                cmax=df["log_offset"].quantile(0.95),
-                colorbar=dict(
-                    title="Clock Offset",
-                    tickvals=list(_TICK_MAP.values()),
-                    ticktext=list(_TICK_MAP.keys()),
-                ),
-                line=dict(width=0.5, color="black"),
-            ),
-            text=hover,
-            hovertemplate="%{text}<extra></extra>",
-            showlegend=False,
-        )
-    ]
+    vmax = float(df["log_offset"].quantile(0.95))
 
-    if clockdiff_df is not None:
-        http_df = clockdiff_df[clockdiff_df["is_http"]]
-        if not http_df.empty:
-            traces.append(go.Scattergeo(
-                lat=http_df["latitude"],
-                lon=http_df["longitude"],
-                mode="markers",
-                marker=dict(
-                    size=500,
-                    color="rgba(0,0,0,0)",
-                    line=dict(width=0.002, color="black"),
-                ),
-                hoverinfo="skip",
-                showlegend=True,
-                name="Has HTTP",
-            ))
+    fig = plt.figure(figsize=(14, 7))
+    ax = fig.add_subplot(1, 1, 1, projection=ccrs.EqualEarth())
+    ax.set_global()
+    ax.add_feature(cfeature.LAND, facecolor="#f3f3f3")
+    ax.add_feature(cfeature.COASTLINE, linewidth=0.5, edgecolor="gray")
+    ax.add_feature(cfeature.BORDERS, linewidth=0.3, edgecolor="lightgray")
 
-    return go.Figure(
-        data=traces,
-        layout=go.Layout(
-            title="ICMP Clock Synchronization Quality",
-            geo=dict(
-                projection_type="natural earth",
-                showframe=False,
-                showcoastlines=True,
-                coastlinecolor="gray",
-                showland=True,
-                landcolor="rgb(243, 243, 243)",
-            ),
-            margin=dict(l=0, r=0, t=40, b=0),
-        ),
+    mesh = ax.pcolormesh(
+        lon_grid, lat_grid, z,
+        cmap="RdYlGn_r",
+        vmin=0, vmax=vmax,
+        transform=ccrs.PlateCarree(),
+        shading="gouraud",
     )
+
+    cbar = fig.colorbar(mesh, ax=ax, orientation="vertical", fraction=0.03, pad=0.02)
+    cbar.set_label("Clock Offset")
+    cbar.set_ticks(_TICK_VALS)
+    cbar.set_ticklabels(_TICK_LABELS)
+
+    ax.set_title("ICMP Clock Synchronization Quality")
+    return fig
 
 
 def main() -> None:
@@ -138,13 +105,13 @@ def main() -> None:
     df = pd.concat([new_df, clockdiff_df], ignore_index=True)
 
     fig = build_figure(df, clockdiff_df)
-    html_out = Path(args.output).with_suffix(".html")
-    fig.write_html(str(html_out))
-    print(f"Wrote {html_out}")
+    png_out = Path(args.output).with_suffix(".png")
+    fig.savefig(str(png_out), dpi=150, bbox_inches="tight")
+    print(f"Wrote {png_out}")
 
     if args.svg:
         svg_out = Path(args.output).with_suffix(".svg")
-        fig.write_image(str(svg_out))
+        fig.savefig(str(svg_out), bbox_inches="tight")
         print(f"Wrote {svg_out}")
 
 

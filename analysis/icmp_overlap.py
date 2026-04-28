@@ -1,8 +1,8 @@
 import argparse
 from pathlib import Path
 
-import polars as pl
 import plotly.graph_objects as go
+import polars as pl
 
 
 def load_responding_ips(path: str) -> set[int]:
@@ -19,7 +19,14 @@ def load_responding_ips(path: str) -> set[int]:
 def load_timestamp_ips(path: str) -> tuple[set[int], set[int]]:
     """Return (standard_ips, nonstandard_ips) for success==1 timestamp rows."""
     df = (
-        pl.scan_csv(path, schema_overrides={"saddr_raw": pl.Int64, "success": pl.Int8, "ts_nonstandard": pl.Int8})
+        pl.scan_csv(
+            path,
+            schema_overrides={
+                "saddr_raw": pl.Int64,
+                "success": pl.Int8,
+                "ts_nonstandard": pl.Int8,
+            },
+        )
         .filter(pl.col("success") == 1)
         .select("saddr_raw", "ts_nonstandard")
         .collect()
@@ -30,9 +37,7 @@ def load_timestamp_ips(path: str) -> tuple[set[int], set[int]]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="How often do ICMP ping servers also support ICMP timestamp?"
-    )
+    parser = argparse.ArgumentParser()
     parser.add_argument("echo", help="icmp_echo CSV")
     parser.add_argument("timestamp", help="icmp_timestamp CSV")
     parser.add_argument("-o", "--output", default="out/icmp_overlap.html")
@@ -62,7 +67,7 @@ def main() -> None:
     print(f"\nOverlap: {len(both):,} IPs respond to both")
     print(f"Echo only: {len(echo_only):,}")
     print(f"Timestamp only: {len(ts_only):,}")
-    print(f"Of ping servers, {100*len(both)/len(echo_ips):.1f}% also do timestamp")
+    print(f"Of ping servers, {100 * len(both) / len(echo_ips):.1f}% also do timestamp")
 
     categories = ["Echo (ping) only", "Both", "Timestamp only"]
     total = len(echo_only) + len(both) + len(ts_only)
@@ -71,25 +76,36 @@ def main() -> None:
 
     # Standard timestamp portion (or full bar for echo-only)
     standard_counts = [len(echo_only), len(both_standard), len(ts_only_standard)]
-    fig.add_trace(go.Bar(
-        name="Standard timestamp",
-        x=categories,
-        y=standard_counts,
-        marker_color=["steelblue", "mediumseagreen", "crimson"],
-        text=[f"{c:,}<br>({100*c/total:.1f}%)" for c in standard_counts],
-        textposition="inside",
-    ))
+    fig.add_trace(
+        go.Bar(
+            name="Standard timestamp",
+            x=categories,
+            y=standard_counts,
+            marker_color=["steelblue", "mediumseagreen", "crimson"],
+            text=[f"{c:,}<br>({100 * c / total:.1f}%)" for c in standard_counts],
+            textposition="inside",
+        )
+    )
 
     # Non-standard timestamp portion
     nonstandard_counts = [0, len(both_nonstandard), len(ts_only_nonstandard)]
-    fig.add_trace(go.Bar(
-        name="Non-standard timestamp (ts_nonstandard=1)",
-        x=categories,
-        y=nonstandard_counts,
-        marker_color=["rgba(0,0,0,0)", "rgba(255,165,0,0.7)", "rgba(255,165,0,0.7)"],
-        text=[("" if c == 0 else f"{c:,}<br>({100*c/total:.1f}%)") for c in nonstandard_counts],
-        textposition="inside",
-    ))
+    fig.add_trace(
+        go.Bar(
+            name="Non-standard timestamp (ts_nonstandard=1)",
+            x=categories,
+            y=nonstandard_counts,
+            marker_color=[
+                "rgba(0,0,0,0)",
+                "rgba(255,165,0,0.7)",
+                "rgba(255,165,0,0.7)",
+            ],
+            text=[
+                ("" if c == 0 else f"{c:,}<br>({100 * c / total:.1f}%)")
+                for c in nonstandard_counts
+            ],
+            textposition="inside",
+        )
+    )
 
     pct = 100 * len(both) / len(echo_ips)
     fig.update_layout(

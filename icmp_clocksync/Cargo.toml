@@ -13,3 +13,4 @@ ping-rs = "0.1"
 ureq = "3.1.4"
 rayon = "1.11.0"
 serde = { version = "1", features = ["derive"] }
+anyhow = "1"

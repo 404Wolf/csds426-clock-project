@@ -84,8 +84,13 @@ Cargo.lock
 /output.csv
 /slides/data-report_files/libs
 /slides
+!/slides/
+!/slides/final.qmd
 /report.pdf
 /analysis/clock_sync_map.svg
 /probes.csv
 /flake.nix
 /report/report.pdf
+/slides/final_files/libs
+/slides/presentation_files/libs
+/slides/final.html

@@ -1,0 +1,89 @@
+<style>
+  .pt {
+    border-collapse: collapse;
+    font-size: 0.68em;
+    font-family: monospace;
+    width: 100%;
+  }
+
+  .pt th, .pt td {
+    padding: 2px 8px;
+    border-left: 0.5px solid #ccc;
+  }
+
+  .pt th:first-child, .pt td:first-child {
+    border-left: none;
+  }
+
+  .pt thead tr {
+    border-top: 1.5px solid #555;
+    border-bottom: 1.5px solid #555;
+  }
+
+  .pt td { text-align: right; }
+  .pt td:nth-child(4), .pt td:nth-child(5), .pt td:nth-child(9) { text-align: left; }
+  .pt th { text-align: right; }
+  .pt th:nth-child(4), .pt th:nth-child(5), .pt th:nth-child(9) { text-align: left; }
+
+  .pt tr.rnd-odd  td { background: #ffffff !important; }
+  .pt tr.rnd-even td { background: #f4f4f4 !important; }
+</style>
+
+<table class="pt">
+  <thead>
+    <tr>
+      <th>round</th>
+      <th>req</th>
+      <th>offset (µs)</th>
+      <th>send (:ss.µs)</th>
+      <th>recv (:ss.µs)</th>
+      <th>Δsend (µs)</th>
+      <th>Δrecv (µs)</th>
+      <th>rtt (µs)</th>
+      <th>server (:ss)</th>
+    </tr>
+  </thead>
+  <tbody>
+
+    <!-- Round 1 -->
+    <tr class="rnd-odd">  <td>1</td> <td>1</td> <td>−1,300,000</td> <td>:43.84390</td> <td>:44.00766</td> <td>        </td> <td>        </td> <td>163,762</td> <td style="color:#aaa">:44</td> </tr>
+    <tr class="rnd-odd">  <td>1</td> <td>2</td> <td>  −780,000</td> <td>:43.84391</td> <td>:44.04899</td> <td>      6</td> <td> 41,333</td> <td>205,089</td> <td style="color:#aaa">:44</td> </tr>
+    <tr class="rnd-odd">  <td>1</td> <td>3</td> <td>  −260,000</td> <td>:43.84392</td> <td>:44.05018</td> <td>     10</td> <td>  1,190</td> <td>206,269</td> <td style="color:#aaa">:44</td> </tr>
+    <tr class="rnd-odd">  <td>1</td> <td>4</td> <td>   260,000</td> <td>:44.26000</td> <td>:44.40176</td> <td>416,080</td> <td>351,573</td> <td>141,762</td> <td style="color:#aaa">:44</td> </tr>
+    <tr class="rnd-odd">  <td>1</td> <td>5</td> <td>   780,000</td> <td>:44.78000</td> <td>:44.94158</td> <td>520,001</td> <td>539,820</td> <td>161,581</td> <td>:44</td>                    </tr>
+    <tr class="rnd-odd">  <td>1</td> <td>6</td> <td> 1,300,000</td> <td>:45.30000</td> <td>:45.46620</td> <td>520,000</td> <td>524,619</td> <td>166,200</td> <td>:45</td>                    </tr>
+
+    <!-- Round 2 -->
+    <tr class="rnd-even"> <td>2</td> <td>1</td> <td>   390,000</td> <td>:46.39000</td> <td>:46.53853</td> <td>        </td> <td>        </td> <td>148,537</td> <td style="color:#aaa">:46</td> </tr>
+    <tr class="rnd-even"> <td>2</td> <td>2</td> <td>   650,000</td> <td>:46.65000</td> <td>:46.81259</td> <td>259,999</td> <td>274,055</td> <td>162,593</td> <td>:46</td>                    </tr>
+    <tr class="rnd-even"> <td>2</td> <td>3</td> <td>   910,000</td> <td>:46.91000</td> <td>:47.05056</td> <td>260,001</td> <td>237,968</td> <td>140,560</td> <td>:47</td>                    </tr>
+    <tr class="rnd-even"> <td>2</td> <td>4</td> <td> 1,170,000</td> <td>:47.17000</td> <td>:47.33422</td> <td>259,999</td> <td>283,667</td> <td>164,228</td> <td style="color:#aaa">:47</td> </tr>
+    <tr class="rnd-even"> <td>2</td> <td>5</td> <td> 1,430,000</td> <td>:47.43000</td> <td>:47.56804</td> <td>260,000</td> <td>233,814</td> <td>138,042</td> <td style="color:#aaa">:47</td> </tr>
+    <tr class="rnd-even"> <td>2</td> <td>6</td> <td> 1,690,000</td> <td>:47.69000</td> <td>:47.83335</td> <td>260,000</td> <td>265,309</td> <td>143,351</td> <td style="color:#aaa">:47</td> </tr>
+
+    <!-- Round 3 -->
+    <tr class="rnd-odd">  <td>3</td> <td>1</td> <td>   455,000</td> <td>:48.45500</td> <td>:48.59639</td> <td>        </td> <td>        </td> <td>141,395</td> <td style="color:#aaa">:48</td> </tr>
+    <tr class="rnd-odd">  <td>3</td> <td>2</td> <td>   585,000</td> <td>:48.58500</td> <td>:48.75231</td> <td>129,999</td> <td>155,918</td> <td>167,314</td> <td style="color:#aaa">:48</td> </tr>
+    <tr class="rnd-odd">  <td>3</td> <td>3</td> <td>   715,000</td> <td>:48.71500</td> <td>:48.85443</td> <td>130,000</td> <td>102,121</td> <td>139,435</td> <td style="color:#aaa">:48</td> </tr>
+    <tr class="rnd-odd">  <td>3</td> <td>4</td> <td>   845,000</td> <td>:48.84500</td> <td>:48.98600</td> <td>130,000</td> <td>131,569</td> <td>141,004</td> <td>:48</td>                    </tr>
+    <tr class="rnd-odd">  <td>3</td> <td>5</td> <td>   975,000</td> <td>:48.97500</td> <td>:49.11442</td> <td>130,000</td> <td>128,425</td> <td>139,429</td> <td>:49</td>                    </tr>
+    <tr class="rnd-odd">  <td>3</td> <td>6</td> <td> 1,105,000</td> <td>:49.10500</td> <td>:49.24275</td> <td>130,000</td> <td>128,329</td> <td>137,758</td> <td style="color:#aaa">:49</td> </tr>
+
+    <!-- Round 4 -->
+    <tr class="rnd-even"> <td>4</td> <td>1</td> <td>   747,500</td> <td>:50.74750</td> <td>:50.89059</td> <td>        </td> <td>        </td> <td>143,091</td> <td style="color:#aaa">:50</td> </tr>
+    <tr class="rnd-even"> <td>4</td> <td>2</td> <td>   812,500</td> <td>:50.81250</td> <td>:50.95861</td> <td> 65,000</td> <td> 68,025</td> <td>146,116</td> <td>:50</td>                    </tr>
+    <tr class="rnd-even"> <td>4</td> <td>3</td> <td>   877,500</td> <td>:50.87750</td> <td>:51.05262</td> <td> 65,000</td> <td> 94,008</td> <td>175,124</td> <td>:51</td>                    </tr>
+    <tr class="rnd-even"> <td>4</td> <td>4</td> <td>   942,500</td> <td>:50.94250</td> <td>:51.10865</td> <td> 65,000</td> <td> 56,030</td> <td>166,154</td> <td style="color:#aaa">:51</td> </tr>
+    <tr class="rnd-even"> <td>4</td> <td>5</td> <td> 1,007,500</td> <td>:51.00750</td> <td>:51.14433</td> <td> 65,000</td> <td> 35,680</td> <td>136,834</td> <td style="color:#aaa">:51</td> </tr>
+    <tr class="rnd-even"> <td>4</td> <td>6</td> <td> 1,072,500</td> <td>:51.07250</td> <td>:51.21066</td> <td> 65,001</td> <td> 66,326</td> <td>138,159</td> <td style="color:#aaa">:51</td> </tr>
+
+    <!-- Round 5 -->
+    <tr class="rnd-odd">  <td>5</td> <td>1</td> <td>   763,750</td> <td>:52.76375</td> <td>:52.90606</td> <td>        </td> <td>        </td> <td>142,310</td> <td style="color:#aaa">:52</td> </tr>
+    <tr class="rnd-odd">  <td>5</td> <td>2</td> <td>   796,250</td> <td>:52.79625</td> <td>:52.94402</td> <td> 32,500</td> <td> 37,966</td> <td>147,776</td> <td style="color:#aaa">:52</td> </tr>
+    <tr class="rnd-odd">  <td>5</td> <td>3</td> <td>   828,750</td> <td>:52.82875</td> <td>:52.97157</td> <td> 32,501</td> <td> 27,551</td> <td>142,826</td> <td>:52</td>                    </tr>
+    <tr class="rnd-odd">  <td>5</td> <td>4</td> <td>   861,250</td> <td>:52.86125</td> <td>:53.03700</td> <td> 32,499</td> <td> 65,428</td> <td>175,755</td> <td>:53</td>                    </tr>
+    <tr class="rnd-odd">  <td>5</td> <td>5</td> <td>   893,750</td> <td>:52.89375</td> <td>:53.03470</td> <td> 32,500</td> <td> −2,296</td> <td>140,959</td> <td style="color:#aaa">:53</td> </tr>
+    <tr class="rnd-odd">  <td>5</td> <td>6</td> <td>   926,250</td> <td>:52.92625</td> <td>:53.13274</td> <td> 32,500</td> <td> 98,031</td> <td>206,490</td> <td style="color:#aaa">:53</td> </tr>
+
+  </tbody>
+</table>
